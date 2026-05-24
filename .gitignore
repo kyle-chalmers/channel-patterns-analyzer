@@ -1,0 +1,41 @@
+# Secrets and personal config
+.env
+.env.*
+!.env.example
+.internal/
+client_secret.json
+*credentials*.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+env/
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Build / cache
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local data caches (analyzer outputs)
+sample_data/
+output/
+*.csv.cache
+
+# Live-generated artifacts that should be created by the viewer, not committed
+# (analyzer code, the write-notion-report Skill, /schedule routine config)
+CLAUDE.md
+.claude/skills/
+routine_config.json
