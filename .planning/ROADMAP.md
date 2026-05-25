@@ -25,7 +25,7 @@
   2. The published page leads with a Data Health section that names the snapshot date of every analytics table and flags any table older than 3 days in America/Phoenix
   3. Every canonical SQL file executed during the run writes a JSON result dump to `runs/{run_date}/queries/{query_name}.json`, and `runs/{run_date}/summary.json` records snapshot dates, row counts, durations, and the Notion page URL
   4. If the Notion write fails or env vars are missing, `reports/{run_date}.md` and `runs/{run_date}/summary.json` are still written, the failure is captured in `summary.json`, and the operator sees an actionable error mapped to `docs/runbook.md`
-  5. Reading `.claude/skills/write-notion-report/SKILL.md` frontmatter in isolation, Claude knows to invoke the Skill when handed a completed analyzer report dictionary**Plans:** 1/4 plans executed
+  5. Reading `.claude/skills/write-notion-report/SKILL.md` frontmatter in isolation, Claude knows to invoke the Skill when handed a completed analyzer report dictionary**Plans:** 3/4 plans executed
 
 **Wave 1**
 
@@ -33,8 +33,8 @@
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 01-02-PLAN.md — Build .claude/skills/write-notion-report/SKILL.md (frontmatter + input contract + Notion block rendering + structured-dict return)
-- [ ] 01-03-PLAN.md — Build .claude/commands/run-analyzer.md recipe (linear 80–150 lines: preflight, transport probe, data-health + top-videos queries, report draft, Skill invocation, summary.json with try/finally)
+- [x] 01-02-PLAN.md — Build .claude/skills/write-notion-report/SKILL.md (frontmatter + input contract + Notion block rendering + structured-dict return)
+- [x] 01-03-PLAN.md — Build .claude/commands/run-analyzer.md recipe (linear 80–150 lines: preflight, transport probe, data-health + top-videos queries, report draft, Skill invocation, summary.json with try/finally)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -86,7 +86,7 @@
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. First Notion Report End-to-End | 1/4 | In Progress|  |
+| 1. First Notion Report End-to-End | 3/4 | In Progress|  |
 | 2. Honest Analyst Depth | 0/3 | Not started | - |
 | 3. CSV Parity and Operational Polish | 0/0 | Not started | - |
 
