@@ -35,7 +35,6 @@ output/
 *.csv.cache
 
 # Live-generated artifacts that should be created by the viewer, not committed
-# (analyzer code, the write-notion-report Skill, /schedule routine config)
-CLAUDE.md
+# (the write-notion-report Skill, /schedule routine config)
 .claude/skills/
 routine_config.json
