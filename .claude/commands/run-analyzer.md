@@ -130,13 +130,81 @@ Output (held in working memory for the draft step): `{eligible_count: N, total_f
 
 ## Step 6: Draft the report (PERSIST-01)
 
-Compose the markdown report per CLAUDE.md §"Report structure" and the Phase 1 default from `.planning/phases/01-first-notion-report-end-to-end/01-CONTEXT.md` (Data Health + Headline + one What's-working finding sourced from sql/02, with labeled placeholders for What's not working, Patterns worth watching, Open questions). All six section headings appear, every time. Never silently omit a section.
+Compose the markdown report per `CLAUDE.md § "Report structure"`. This step implements REPORT-01 (six-section structure), REPORT-02 (numbers + age + confidence in plain sight), and the D-07 inline-parenthetical format (per `.planning/phases/02-honest-analyst-depth/02-CONTEXT.md`).
 
-Voice rules from CLAUDE.md apply: no em dashes, no banned vocabulary ("leverage", "robust", "seamless", "delve", "transformative"), no formulaic openers ("Great news!", "In conclusion,"), first-person plural where it fits, vary sentence length.
+### 1. Rules to apply before writing prose
 
-For the Data Health section: render a table of the 4 rows from Step 2, then a one-sentence prose summary. If `stale_tables` is non-empty, the prose names each stale table and notes which downstream sections are constrained. If empty, the prose says all four tables are within the 3-day freshness contract.
+Before drafting any sentence, load the following CLAUDE.md sections and apply each rule to the data on hand:
 
-For the What's working finding: pick the top row from Step 3 (highest view count), include title, view_count, days_since_published, and label confidence "low" (per RESEARCH §10 Q6: this is a raw top-N reading, not a pattern claim). If `daily_video_stats` is stale, disclaim the staleness in this section.
+- Apply `CLAUDE.md § "Age control is non-negotiable"`. Exclude any video with `days_since_published < 14` from top-performer claims and pattern claims. If such a video is mentioned at all, flag it as low-confidence and say so inline. Cross-age comparisons use the first-30-day window when possible. When the data does not support a strict first-30-day window, use the `views_per_day_since_publish_proxy` from `sql/03_age_controlled_performance.sql` and label it as a proxy explicitly per that SQL file's own IMPORTANT header comment block. "Trending up" or "declining" requires at least 14 days of data per video in the comparison set.
+- Apply `CLAUDE.md § "Small samples get hedged, every time"`. Use the `eligible_count` from Step 5 to assign the channel-wide confidence label per the threshold table in that section (`< 5` low, `5 to 10` moderate, `>= 10` standard; boundaries verified in Step 5). For sub-population claims, scope `n` to that sub-population. A tutorial-only claim cites the tutorial-only count (e.g., `n=7`), not the channel-wide `eligible_count` (e.g., `n=18`). See RESEARCH.md Pitfall 2.
+- Apply `CLAUDE.md § "Brutal honesty about underperformance"`. Wins and misses get equal weight; do not bury weak results in caveats; name videos and numbers plainly. A recent bet that did not land gets named as not landing.
+- Apply `CLAUDE.md § "Never claim what the data does not support"`. Distinguish observed (in the query result), inferred (a reasonable read), and assumed (a guess being flagged). If data did not move enough to be meaningful at this sample size, say so. If a query returned no rows or suspicious rows, report that instead of analyzing around it.
+- Apply `CLAUDE.md § "Voice"`. First-person plural where it fits ("we tried", "what we are seeing"). No em dash (U+2014). No en dash (U+2013) as punctuation. No banned vocabulary from the project CLAUDE.md list (delve, leverage, robust, seamless, navigate, underscore, showcase, tapestry, realm, multifaceted, transformative, testament to). No formulaic openers or closers ("Great news!", "Overall,", "In conclusion,"). No contrastive reframes ("It's not X, it's Y"; "Not just X but Y"). Vary sentence length.
+- Apply D-08 from `.planning/phases/02-honest-analyst-depth/02-CONTEXT.md`. The prior reports read in Step 4 are calibration memory, not reader memory. Do not cite them in prose. Cross-week framing per D-09 is allowed only when self-contained (e.g., `"For the third consecutive week, X has held."`). Banned phrases: `"as we said last week"`, `"as noted previously"`, `"the prior report"`, `"this continues the trend we observed"`.
+
+### 2. Confidence label format (per D-07)
+
+For prose claims, end the sentence with ` (label, n=N).` where `label` is one of `low confidence`, `moderate confidence`, `standard confidence`. The `n=N` is the count of *eligible* videos in the comparison set the claim drew from (Step 5's channel-wide `eligible_count` for channel-wide claims, or the sub-population count for scoped claims). Example from RESEARCH.md Pattern 5:
+
+```
+VID042 "GraphQL vs REST" pulled 4,300 views in its first 30 days, about 5x the channel median of 860 (standard confidence, n=18).
+```
+
+For table-shaped claims, add `Confidence` and `n` columns to the table; do not inline the parenthetical inside cells (D-07). Example:
+
+| Video | Views (first 30d) | vs. median | Confidence | n |
+|-------|-------------------|------------|------------|---|
+| GraphQL vs REST | 4,300 | 5x | standard | 18 |
+
+**D-07a (single claim, single label):** Do not emit per-section header confidence blocks. Different claims in the same section may carry different labels. The label rides with the claim it qualifies, one label per claim.
+
+**D-07b (no Notion callout for confidence labels):** Confidence labels render as plain text through whatever Notion blocks the Skill emits. Notion callouts are reserved for the stale-data flags from the Phase 1 Data Health section; do not wrap confidence parentheticals in callouts.
+
+### 3. Six-section structure (REPORT-01, D-11)
+
+The report renders all six sections in this order, with this heading text exactly:
+
+- `## Data Health` (already produced by Step 2; render verbatim from the parsed `sql/04` output. No analyst commentary added here unless `stale_tables` is non-empty, in which case the section adds one line per stale table naming the staleness in days.)
+- `## Headline` (one or two sentences capturing the most important finding of the week. Lead with the finding; no preamble.)
+- `## What is working` (two to four findings with numbers, age context, and inline confidence labels. Exclude any video with `days_since_published < 14`; if such a video is mentioned, low-confidence flag applies.)
+- `## What is not working` (same shape as What is working. Do not skip this section if results are not dramatic; smaller misses still matter per CLAUDE.md § "Brutal honesty about underperformance".)
+- `## Patterns worth watching` (early signals labeled with confidence; multi-week framing per D-09 allowed when self-contained.)
+- `## Open questions` (things the data hints at but cannot answer.)
+
+Every section heading renders, every time (D-11). Empty-section bodies use one of these explicit forms:
+
+- `Nothing material to report this week.` when the data was available but no finding meets the confidence bar.
+- `{Topic} analysis unavailable: {table} is {N} days stale (see Data Health).` when the section depended on a stale table.
+
+Never silently omit a heading. Never pad with weak findings to fill a section.
+
+### 4. Stale-table disclaimer rule (D-12)
+
+If a finding would have drawn from a table flagged as stale by the Step 2 data-health check (i.e., the table appears in `stale_tables`), replace the finding with a one-line disclaimer that names the table and the staleness in days, and points to Data Health. Do NOT compute against stale data.
+
+When multiple findings in the same section would all disclaim the same stale table, collapse to ONE disclaimer per section. Example:
+
+```
+Watch-time and traffic-source analysis is unavailable: daily_video_analytics is 89 days stale (see Data Health).
+```
+
+Then list whatever non-stale-dependent findings are present in the same section, if any. This is RESEARCH.md Pitfall 5 (stale-table disclaimer pile-up); the per-section collapse keeps the report from reading as 60% disclaimer and 40% analysis when two tables are stale.
+
+The `SIMULATE_STALE` env-var (Step 2) is the testing path for this rule when no real stale state exists in BigQuery. The first Phase 2 run against live data will exercise the rule only if real staleness is present or `SIMULATE_STALE` was set at run time.
+
+### 5. Per-section drafting guidance
+
+- **Data Health:** render the per-table table from Step 2's parsed sql/04 result. If `stale_tables` is non-empty, follow with one line per stale table naming the staleness in days. If empty, follow with one sentence stating all four tables are within the 3-day freshness contract.
+- **Headline:** one or two sentences. Lead with the finding the reader should remember. Do not open with a preamble or a status update.
+- **What is working:** two to four findings drawn from `sql/02` (top videos) and `sql/03` (age-controlled). Each finding includes the video title, the number being cited, the `days_since_published` for age context, and an inline `(label, n=N).` parenthetical. If `daily_video_stats` is stale, the section starts with the D-12 disclaimer for that table.
+- **What is not working:** findings about videos that underperformed comparable peers. Use the same shape as What is working. Apply CLAUDE.md § "Brutal honesty about underperformance" plainly. Do not soften.
+- **Patterns worth watching:** early signals labeled with confidence; multi-week framing per D-09 is allowed if self-contained. If the channel-wide `eligible_count` is below 5, default every pattern claim in this section to `low confidence` per the CLAUDE.md threshold table; if `daily_video_analytics` or `daily_traffic_sources` is stale, most pattern claims will land as D-12 disclaimers.
+- **Open questions:** things the data hints at but cannot answer; useful for next week's analysis or for a manual look.
+
+### 6. Output dict (NOTION-02)
+
+The draft step ends by assembling the structured report dictionary the existing `write-notion-report` Skill invocation step consumes. Per PHASE1-ASSUMPTIONS-VERIFIED.md A2: Phase 1's Skill renders Notion blocks from `markdown_body` only and the per-finding `confidence` field on `working[]` / `not_working[]` / `patterns[]` entries is a plain string (`"low" | "moderate" | "standard"`), not a structured `{label, n}` dict. Plan 02-02 keeps the markdown-rendering path: place the full `(label, n=N).` parenthetical inline in the prose (inside `markdown_body` and inside each entry's `body` string), and populate the entry-level `confidence` field with the label string only. The `n` lives in the prose. A future Skill enrichment can promote `confidence` to `{label, n}` without breaking this contract.
 
 Write the assembled markdown to `reports/{run_date}.md`. Also copy the same content to `runs/{run_date}/report.md` per the folder layout in `runs/README.md`.
 
