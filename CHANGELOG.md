@@ -6,6 +6,16 @@ One entry per change, dated. Brief is fine; the goal is auditability, not narrat
 
 ---
 
+## 2026-05-25
+
+Phase 2 Plan 02-01 SQL correctness fixes (D-05). All three files pass `bq` dry-run validation against the live `youtube_analytics` dataset.
+
+- `sql/02_top_full_length_videos.sql`: before — joined on `video_metadata`'s latest snapshot only, used single-quoted `CURRENT_DATE('America/Phoenix')` in the `DATE_DIFF`, capped output at `LIMIT 20`; after — joins on the LEAST common snapshot of `video_metadata` and `daily_video_stats` via a new `latest_common` CTE, uses double-quoted `CURRENT_DATE("America/Phoenix")` per the project's canonical form, no row limit, header rewritten to cite `CLAUDE.md § "Age control is non-negotiable"` and `BUSINESS_RULES.md § "Data health expectations"` by section title. Impact on recent reports: would have changed top-N membership on any day where the two source tables landed at different snapshots. The 2026-05-25 Phase 1 report was unaffected (both tables at the same snapshot that day), so no retroactive number change; the fix is preventative for future runs.
+- `sql/03_age_controlled_performance.sql`: same three changes as sql/02 (latest_common CTE, double-quoted Phoenix tz on both `DATE_DIFF` calls, `LIMIT 20` removed). The 14-day age filter in the WHERE clause now fires off Phoenix-local dates explicitly. Before/after impact: the same out-of-sync-table row-drop risk existed here and is also closed; the age-filter behavior was already correct under the prior single-quoted Phoenix form, so the filter's boundary classification doesn't change with this commit (the canonical-form switch is for project-wide consistency, not a behavior fix on the filter itself).
+- `sql/04_data_health_check.sql`: replaced four single-quoted `CURRENT_DATE('America/Phoenix')` calls with double-quoted `CURRENT_DATE("America/Phoenix")` for project-wide canonical form. Header rewritten: the broken `BUSINESS_RULES.md §5` reference (the section number does not exist) is now `BUSINESS_RULES.md § "Data health expectations"`, and the conditional "if your scheduling timezone differs" language is replaced with a statement that Phoenix is the canonical timezone. No `days_stale` number changes from this commit.
+
+---
+
 ## 2026-05-25 — Phase 1 first end-to-end run
 
 - Ran /run-analyzer end-to-end against live BigQuery + live Notion. New child page created on the channel-patterns parent (https://www.notion.so/36bccd0549458105b8c4c3cc584e4d47). Local artifacts at reports/2026-05-25.md and runs/2026-05-25/.
