@@ -103,47 +103,47 @@ Deferred until v1 has actually shipped and produced a few real reports.
 
 ## Traceability
 
-Populated by the roadmapper. Each v1 requirement maps to exactly one phase.
+Each v1 requirement maps to exactly one phase.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| HEALTH-01 | TBD | Pending |
-| HEALTH-02 | TBD | Pending |
-| HEALTH-03 | TBD | Pending |
-| BQ-01 | TBD | Pending |
-| BQ-02 | TBD | Pending |
-| BQ-03 | TBD | Pending |
-| CSV-01 | TBD | Pending |
-| CSV-02 | TBD | Pending |
-| ANALYSIS-01 | TBD | Pending |
-| ANALYSIS-02 | TBD | Pending |
-| ANALYSIS-03 | TBD | Pending |
-| ANALYSIS-04 | TBD | Pending |
-| ANALYSIS-05 | TBD | Pending |
-| REPORT-01 | TBD | Pending |
-| REPORT-02 | TBD | Pending |
-| REPORT-03 | TBD | Pending |
-| NOTION-01 | TBD | Pending |
-| NOTION-02 | TBD | Pending |
-| NOTION-03 | TBD | Pending |
-| NOTION-04 | TBD | Pending |
-| NOTION-05 | TBD | Pending |
-| NOTION-06 | TBD | Pending |
-| NOTION-07 | TBD | Pending |
-| PERSIST-01 | TBD | Pending |
-| PERSIST-02 | TBD | Pending |
-| PERSIST-03 | TBD | Pending |
-| SCHED-01 | TBD | Pending |
-| SCHED-02 | TBD | Pending |
-| ERR-01 | TBD | Pending |
-| ERR-02 | TBD | Pending |
-| ERR-03 | TBD | Pending |
+| HEALTH-01 | Phase 1 | Pending |
+| HEALTH-02 | Phase 1 | Pending |
+| HEALTH-03 | Phase 1 | Pending |
+| BQ-01 | Phase 1 | Pending |
+| BQ-02 | Phase 1 | Pending |
+| BQ-03 | Phase 1 | Pending |
+| CSV-01 | Phase 3 | Pending |
+| CSV-02 | Phase 3 | Pending |
+| ANALYSIS-01 | Phase 2 | Pending |
+| ANALYSIS-02 | Phase 2 | Pending |
+| ANALYSIS-03 | Phase 2 | Pending |
+| ANALYSIS-04 | Phase 2 | Pending |
+| ANALYSIS-05 | Phase 2 | Pending |
+| REPORT-01 | Phase 2 | Pending |
+| REPORT-02 | Phase 2 | Pending |
+| REPORT-03 | Phase 2 | Pending |
+| NOTION-01 | Phase 1 | Pending |
+| NOTION-02 | Phase 1 | Pending |
+| NOTION-03 | Phase 1 | Pending |
+| NOTION-04 | Phase 1 | Pending |
+| NOTION-05 | Phase 1 | Pending |
+| NOTION-06 | Phase 1 | Pending |
+| NOTION-07 | Phase 1 | Pending |
+| PERSIST-01 | Phase 1 | Pending |
+| PERSIST-02 | Phase 1 | Pending |
+| PERSIST-03 | Phase 1 | Pending |
+| SCHED-01 | Phase 3 | Pending |
+| SCHED-02 | Phase 3 | Pending |
+| ERR-01 | Phase 3 | Pending |
+| ERR-02 | Phase 1 | Pending |
+| ERR-03 | Phase 3 | Pending |
 
 **Coverage:**
 - v1 requirements: 31 total
-- Mapped to phases: 0 (pending roadmap creation)
-- Unmapped: 31 ⚠️ (resolved when ROADMAP.md is written)
+- Mapped to phases: 31 ✓
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-05-24*
-*Last updated: 2026-05-24 after initial definition*
+*Last updated: 2026-05-24 after roadmap creation (traceability table populated)*
