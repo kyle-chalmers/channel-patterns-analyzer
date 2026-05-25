@@ -54,6 +54,7 @@ The dataset is small enough (~23 videos across 4 tables) that committing raw que
   "notion_write_ok": true,
   "notion_page_id": "<page-id>",
   "notion_url": "https://www.notion.so/Weekly-report-2026-05-24-<shortid>",
+  "prior_reports_consulted": ["2026-05-18", "2026-05-11", "2026-05-04"],
   "errors": []
 }
 ```
@@ -61,6 +62,8 @@ The dataset is small enough (~23 videos across 4 tables) that committing raw que
 Always write `summary.json`, even on failure. A failed run with `errors: [...]` is more useful than a missing folder.
 
 `transport` is `"bq_cli"` when the run used the local `bq` CLI and `"bq_mcp"` when it used the BigQuery MCP tool surface; the recipe probes available tools at runtime (per CONTEXT.md D-03) and records which one fired. `notion_url` is populated when `notion_write_ok` is true, so post-mortems can jump straight to the published page without rebuilding the URL from `notion_page_id`.
+
+`prior_reports_consulted` is the list of dates of `reports/{YYYY-MM-DD}.md` files the analyzer read during the prior-report calibration step at draft time (per CLAUDE.md § "Report structure" and `.planning/phases/02-honest-analyst-depth/02-CONTEXT.md` D-10). The array MAY be empty if fewer than three prior reports exist or none were consulted (e.g., the first ever run). The recipe filters out today's `run_date` before selecting the three most recent dates, so this list never includes today (same-day retries belong to "this run", not the calibration archive). Phase 2 Plan 02-03 adds a `voice_audit` field for the self-audit step; it is not part of the Phase 2 Plan 02-02 schema.
 
 ## Related
 
