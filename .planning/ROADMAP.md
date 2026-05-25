@@ -37,7 +37,10 @@
   3. Published reports contain the six required sections in order (Data Health, Headline, What is working, What is not working, Patterns worth watching, Open questions), with findings showing numbers, age context, and confidence labels inline
   4. Before drafting, the analyzer reads the three most recent `reports/{date}.md` files and uses them to calibrate confidence and avoid restating prior findings verbatim
   5. Report prose passes the voice rules — no em dashes, none of the banned vocabulary, no formulaic openers or closers, first-person plural where it fits
-**Plans:** TBD
+**Plans:** 3 plans
+- [ ] 02-01-PLAN.md — Fix sql/02, sql/03, sql/04 (Phoenix tz + latest-common-snapshot CTE + remove LIMIT 20) per D-05; verify Phase 1 dependency assumptions
+- [ ] 02-02-PLAN.md — Extend /run-analyzer recipe with prior-report read step, eligible-count step, and reworked draft step (six sections, inline confidence labels, stale-table disclaimers)
+- [ ] 02-03-PLAN.md — Insert self-audit step (D-01 Layer 2) between draft and publish; extend summary.json schema with voice_audit
 
 ### Phase 3: CSV Parity and Operational Polish
 **Goal:** The analyzer runs end-to-end against `DATA_SOURCE=csv` with identical behavior to the BigQuery path, the weekly Monday 9am Phoenix `/schedule` routine is documented for both local and cloud variants, and every failure mode hit during builds is captured in the runbook so future runs degrade visibly rather than silently.
@@ -56,7 +59,7 @@
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. First Notion Report End-to-End | 0/0 | Not started | - |
-| 2. Honest Analyst Depth | 0/0 | Not started | - |
+| 2. Honest Analyst Depth | 0/3 | Not started | - |
 | 3. CSV Parity and Operational Polish | 0/0 | Not started | - |
 
 ## Coverage Summary
