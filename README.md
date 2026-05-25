@@ -98,17 +98,108 @@ cp .env.example .env
 pip install -r requirements.txt
 ```
 
-### 3. Verify BigQuery access
+### 3. Wire up BigQuery from scratch
 
-The SQL files in `sql/` reference the dataset by its bare name (`youtube_analytics.video_metadata` etc.) because the **project** comes from your active gcloud config, not from the SQL. Set your project before running queries:
+If you've never used the Google Cloud SDK on this machine, do the full walkthrough below. If `gcloud` and `bq` are already installed and authenticated, skip to step 3.5 (smoke test).
+
+The SQL files in `sql/` reference the dataset by its bare name (`youtube_analytics.video_metadata` etc.) because the **project** comes from your active gcloud config, not from the SQL.
+
+#### 3.1 Install the Google Cloud SDK (ships with `gcloud` and `bq`)
+
+macOS (Homebrew):
 
 ```bash
-gcloud config set project "$BQ_PROJECT"
-bq query --use_legacy_sql=false \
-  "SELECT COUNT(*) FROM \`${BQ_DATASET:-youtube_analytics}.video_metadata\` WHERE snapshot_date = CURRENT_DATE()"
+brew install --cask google-cloud-sdk
 ```
 
-If your dataset has a name other than `youtube_analytics`, update the SQL files (one-line replace) or have the analyzer template the dataset name from `BQ_DATASET` when it queries.
+Other platforms or a manual install: follow [cloud.google.com/sdk/docs/install](https://cloud.google.com/sdk/docs/install).
+
+Verify both CLIs are on your PATH:
+
+```bash
+gcloud --version
+bq version
+```
+
+If `bq` is missing after a fresh install, install the bundled component explicitly:
+
+```bash
+gcloud components install bq
+```
+
+#### 3.2 Authenticate (two separate logins)
+
+```bash
+# 1. User credentials — what `gcloud` and `bq` use for interactive commands.
+gcloud auth login
+
+# 2. Application Default Credentials — what client libraries (Python, etc.) use.
+#    Needed if you ever query BigQuery from a script instead of the bq CLI.
+gcloud auth application-default login
+```
+
+Both commands open a browser. Sign in with the Google account that has access to the project holding `youtube_analytics`.
+
+#### 3.3 Point gcloud at your project
+
+Load `BQ_PROJECT` and `BQ_DATASET` from `.env` and set the project as the active gcloud project:
+
+```bash
+# Pull BQ_PROJECT and BQ_DATASET into your shell from .env
+export $(grep -E '^(BQ_PROJECT|BQ_DATASET)=' .env | xargs)
+
+gcloud config set project "$BQ_PROJECT"
+gcloud config list   # confirm: account = your email, project = $BQ_PROJECT
+```
+
+`BQ_DATASET` will almost certainly be something other than `youtube_analytics` — that's just the placeholder name from the [youtube-bigquery-pipeline](https://github.com/kyle-chalmers/youtube-bigquery-pipeline) repo. Set it to whatever your dataset is actually called in BigQuery. Run `bq ls` (next step) to confirm the name.
+
+#### 3.4 Enable the BigQuery API (one-time per project)
+
+```bash
+gcloud services enable bigquery.googleapis.com
+```
+
+If the project already had BigQuery enabled, this is a no-op and exits cleanly.
+
+#### 3.5 Smoke-test access
+
+First, see what datasets actually live in the project so you can set `BQ_DATASET` correctly:
+
+```bash
+bq ls   # lists every dataset in $BQ_PROJECT — pick the one holding your YouTube tables
+```
+
+If the name doesn't match what's in `.env`, update `.env` now and re-run `export $(grep -E '^(BQ_PROJECT|BQ_DATASET)=' .env | xargs)`.
+
+Then confirm the four expected tables are in the dataset and inspect one:
+
+```bash
+bq ls "$BQ_DATASET"                  # should list 4 tables: video_metadata, daily_video_stats, daily_video_analytics, daily_traffic_sources
+bq show "$BQ_DATASET.video_metadata"
+```
+
+Run a tiny query against the freshest snapshot to confirm read access end-to-end:
+
+```bash
+bq query --use_legacy_sql=false --format=pretty \
+  "SELECT COUNT(*) AS rows_today
+   FROM \`$BQ_DATASET.video_metadata\`
+   WHERE snapshot_date = CURRENT_DATE('America/Phoenix')"
+```
+
+If that returns a row count, the analyzer can read BigQuery. If it errors, the most common causes are:
+
+- **403 / permission denied:** the signed-in user doesn't have `roles/bigquery.dataViewer` on the dataset (or `roles/bigquery.jobUser` on the project). Grant in the GCP console under IAM.
+- **404 / not found:** `BQ_DATASET` doesn't match what's actually in BigQuery. Run `bq ls` again, update `.env`, and re-export.
+- **`bq: command not found`:** the SDK installed but `bq` isn't on PATH. Re-run `gcloud components install bq` or restart your shell.
+
+#### 3.6 Dataset name in the SQL files
+
+The SQL files in `sql/` currently hardcode `youtube_analytics.<table>`. Your dataset is almost certainly named something else, so either:
+
+- One-line find-and-replace `youtube_analytics` → `$BQ_DATASET` (your real name) across `sql/*.sql`, or
+- Have the analyzer template the dataset name from `$BQ_DATASET` at query time (this is the preferred pattern — it keeps the SQL files portable and matches what `CLAUDE.md` already instructs).
 
 ### 4. Configure Notion — both ways
 
@@ -117,7 +208,47 @@ The video demos two paths because cloud routines and terminal sessions see diffe
 - **Local MCP** (terminal sessions): your local Claude Code talks to Notion via an MCP server. The exact install command depends on the current Notion MCP distribution (check [notion.com/integrations](https://www.notion.com/integrations) — at recording time, verify with `claude mcp add notion <official-url-or-npx-cmd>` against current docs).
 - **Web connector** (scheduled routines): in your Anthropic account at [claude.com](https://claude.com), go to Connectors → add Notion. Cloud routines see this; they do NOT see your local MCP config.
 
-### 5. Scheduling: cloud setup ≠ local setup
+### 5. Configure the BigQuery MCP connector (for Claude.ai web / cloud routines)
+
+The `bq` CLI from Step 3 is what your **local** Claude Code session uses. Scheduled routines and Claude.ai web sessions run in a different environment that does NOT see your local `gcloud` login — they need their own connector. This step wires that up.
+
+If you only ever run the analyzer locally from your terminal, you can skip this step.
+
+#### 5.1 Create OAuth credentials in Google Cloud
+
+In [console.cloud.google.com](https://console.cloud.google.com/), with the same project that holds `$BQ_DATASET`:
+
+1. **APIs & Services → OAuth consent screen** — if you've never configured this for the project, do it now. User type **External** (unless you're on Google Workspace and want Internal). Fill in app name + your email. For scopes, add `https://www.googleapis.com/auth/bigquery.readonly` (read-only is enough — the analyzer never writes). Add your own email as a test user.
+
+2. **APIs & Services → Credentials → Create Credentials → OAuth client ID**
+   - Application type: **Web application** (this matters — see the note below)
+   - Name: `Claude BigQuery MCP` (or whatever you like)
+   - Under **Authorized redirect URIs**, click **Add URI** and paste exactly:
+
+     ```
+     https://claude.ai/api/mcp/auth_callback
+     ```
+
+     Character-for-character. No trailing slash. This is the URL Claude redirects back to after Google signs you in.
+
+   - Click **Create**.
+
+3. The modal shows your **Client ID** and **Client Secret**. Keep this tab open — you'll paste both into Claude in the next step. You can also download the JSON for safekeeping.
+
+> **Why "Web application" and not "Desktop app"?** The first time I tried this I chose Desktop and got `Error 400: redirect_uri_mismatch` at the Google sign-in screen. Desktop clients use a loopback/localhost flow and don't accept the `https://claude.ai/api/mcp/auth_callback` redirect that Claude's MCP installer uses. Web application is the correct choice.
+
+#### 5.2 Install the connector in Claude
+
+In Claude (the web app at [claude.ai](https://claude.ai/), or the desktop app's Connectors panel), install the Google Cloud BigQuery connector. When the install dialog asks for credentials, paste:
+
+- **OAuth Client ID** — from Step 5.1
+- **OAuth Client Secret** — from Step 5.1
+
+Click **Continue**, then sign in with the Google account that has access to `$BQ_PROJECT`. After approval you should be redirected back to Claude with the connector installed.
+
+**Treat the Client Secret like a password.** Don't commit it to this (public) repo — Claude stores it on its side; you don't need it locally.
+
+### 6. Scheduling: cloud setup ≠ local setup
 
 If you're running the analyzer locally, the steps above are enough. If you want to wrap it as a scheduled routine, the cloud environment is its own thing:
 
@@ -127,7 +258,7 @@ If you're running the analyzer locally, the steps above are enough. If you want 
 
 A routine that "works locally" will fail in the cloud if any of the above isn't scoped. Verify in the Anthropic UI before the routine's first scheduled fire.
 
-### 6. (Optional) Install GSD to follow the video's build flow
+### 7. (Optional) Install GSD to follow the video's build flow
 
 ```bash
 claude
