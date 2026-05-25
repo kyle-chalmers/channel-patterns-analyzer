@@ -48,7 +48,7 @@ Parse the 4-row result. Each row has `table_name`, `latest_snapshot`, `days_stal
 
 Failure routing:
 
-- If `bq_cli` stderr contains `Reauthentication failed`, `cannot prompt during non-interactive`, or `Could not load the default credentials` (or for `bq_mcp`, the response has an auth-style error), record `errors: [{"category": "bq_auth", "message": "<first line>", "step": "data_health"}]`. Operator message names docs/runbook.md section "BigQuery auth failure". STOP after writing summary.json in Step 9.
+- If `bq_cli` stderr contains `Reauthentication failed`, `cannot prompt during non-interactive`, or `Could not load the default credentials` (or for `bq_mcp`, the response has an auth-style error), record `errors: [{"category": "bq_auth", "message": "<first line>", "step": "data_health"}]`. Operator message names docs/runbook.md section "BigQuery auth failure". STOP after writing summary.json in Step 10.
 - If the response contains `Not found: Table`, record `errors: [{"category": "missing_table", "message": "<error>", "step": "data_health"}]`. Operator message names docs/runbook.md section "Required table is missing or empty". STOP.
 - If parsed result has zero rows, record `errors: [{"category": "empty_result", "message": "0 rows from sql/04", "step": "data_health"}]`. Operator message names docs/runbook.md section "Required table is missing or empty". STOP.
 
@@ -81,7 +81,7 @@ This step implements ANALYSIS-05 and D-08 from `.planning/phases/02-honest-analy
 5. Do NOT cite the prior reports in the new report's prose (D-08). The standalone-tone rule in CLAUDE.md ("assume Kyle has not seen the previous week's report") holds. Cross-week framing is allowed per D-09 only when self-contained.
    - Allowed example: `"For the third consecutive week, tool-specific tutorials are pulling 4×+ the views of conceptual videos."`
    - Banned phrases: `"as we said last week"`, `"as noted previously"`, `"the prior report"`, `"this continues the trend we observed"`, `"as noted"`.
-6. Record the dates actually consulted as a JSON array of `YYYY-MM-DD` strings (e.g., `["2026-05-18", "2026-05-11", "2026-05-04"]`). Hold this list in working memory until Step 9 (write summary.json) writes it to `summary.json.prior_reports_consulted` (D-10). If zero prior reports were consulted (the archive is empty), the recorded value is `[]`. Verify at draft time that the list does not include today's `run_date`. Same-day retries belong to "this run", not the calibration archive.
+6. Record the dates actually consulted as a JSON array of `YYYY-MM-DD` strings (e.g., `["2026-05-18", "2026-05-11", "2026-05-04"]`). Hold this list in working memory until Step 10 (write summary.json) writes it to `summary.json.prior_reports_consulted` (D-10). If zero prior reports were consulted (the archive is empty), the recorded value is `[]`. Verify at draft time that the list does not include today's `run_date`. Same-day retries belong to "this run", not the calibration archive.
 
 Zero-or-few-priors handling: if fewer than three reports exist (or none), read what is there and continue. Do not block. The first Phase 2 run will have at most one prior report (the Phase 1 report from 2026-05-25).
 
@@ -208,7 +208,85 @@ The draft step ends by assembling the structured report dictionary the existing 
 
 Write the assembled markdown to `reports/{run_date}.md`. Also copy the same content to `runs/{run_date}/report.md` per the folder layout in `runs/README.md`.
 
-## Step 7: Assemble the report dict
+## Step 7: Self-audit (run AFTER draft is assembled, BEFORE invoking write-notion-report)
+
+This step implements D-01 Layer 2 from `.planning/phases/02-honest-analyst-depth/02-CONTEXT.md`: Step 6 made the rules explicit at draft time (Layer 1); this step verifies the rules were actually followed. Without it, the draft step still depends on the analyzer remembering to apply the voice rules; with it, every run gates publish on a copy-into-response checklist and the audit trail makes silent voice violations visible after the fact. Run AFTER Step 6 (draft assembled, markdown written to `reports/{run_date}.md`) and BEFORE Step 8 (assemble the report dict for `write-notion-report`).
+
+The pattern is the copy-into-response checklist from Anthropic's Skill best practices (cited in `.planning/phases/02-honest-analyst-depth/02-RESEARCH.md` § "Common Pitfalls" 3): literally copy the checkbox list below into the working response and tick each item as the draft is walked. The checklist mirrors `CLAUDE.md` and `02-CONTEXT.md` rules 1:1, referenced by section title so future `CLAUDE.md` edits flow through by re-derivation, not parallel maintenance.
+
+### Checklist (copy into the response and tick each item)
+
+```
+Self-audit progress:
+
+Structural checks (REPORT-01 / D-11 / D-12):
+- [ ] Six sections present in order: Data Health, Headline, What is working, What is not working, Patterns worth watching, Open questions.
+- [ ] Every section heading renders. Sections with no findings carry an explicit "Nothing material to report this week." line OR a stale-table disclaimer (D-11).
+- [ ] Any section that would have drawn from a stale table (per Data Health) carries a one-line disclaimer naming the table and staleness (D-12). When multiple findings would disclaim the same table, the disclaimers are collapsed to one per section (RESEARCH.md Pitfall 5).
+
+Age-control checks (ANALYSIS-01 / ANALYSIS-04, per CLAUDE.md § "Age control is non-negotiable"):
+- [ ] No video with days_since_published < 14 appears in "What is working" top-performer claims.
+- [ ] Cross-age comparisons use a first-30-day window OR are explicitly labeled as a views_per_day_since_publish_proxy per sql/03's IMPORTANT header comment.
+- [ ] Trending claims gated on at least 14 days of data per video in the comparison set.
+
+Confidence-label checks (ANALYSIS-03 / REPORT-02, per CLAUDE.md § "Small samples get hedged, every time"):
+- [ ] Every pattern claim ends with (label, n=N) parenthetical OR appears in a table with Confidence and n columns (D-07).
+- [ ] Each n cited matches the comparison set the claim actually drew from (RESEARCH.md Pitfall 2: a tutorial-only claim cites the tutorial-only n, not the channel-wide eligible_count).
+- [ ] Labels match CLAUDE.md § "Small samples get hedged, every time" thresholds: n < 5 -> low confidence, n=5 to 10 -> moderate confidence, n >= 10 -> standard confidence.
+
+Voice checks (REPORT-03, per CLAUDE.md § "Voice"):
+- [ ] No em dashes (U+2014) anywhere in the draft.
+- [ ] No en dashes (U+2013) used as punctuation.
+- [ ] None of the banned vocabulary from CLAUDE.md § "Voice" appears. The authoritative list lives in that section (currently: delve, leverage, robust, seamless, navigate, underscore, showcase, tapestry, realm, multifaceted, transformative, testament to). Re-read the section at audit time; the list there is authoritative even if it evolves.
+- [ ] No formulaic openers or closers: no "Great news!", "Great question!", "Overall,", "In conclusion,", "Ultimately,", no contrastive "Not X, but Y" reframes, no opening transitions like "Moreover,", "Furthermore,", "Additionally,".
+- [ ] First-person plural ("we tried", "what we are seeing") used where it fits, per CLAUDE.md § "Voice" ("Kyle and the audience are figuring this out together"). A draft written entirely in third person or marketing-impersonal voice fails this check even if every other voice item passes.
+
+Prior-report citation checks (D-08 / D-09, per CLAUDE.md § "Report structure"):
+- [ ] No prior-report citations in prose. Banned phrases: "as we said last week", "as noted previously", "the prior report", "this continues the trend we observed", "as noted".
+- [ ] Multi-week claims (if any) stand on their own without requiring the reader to have seen a prior report (D-09 example: "For the third consecutive week, X has held." is allowed).
+
+Provenance check (per CLAUDE.md § "Verification & Evidence"):
+- [ ] Numbers cited in the draft are present in the underlying runs/{run_date}/queries/*.json files. Spot-check three randomly chosen claims by grepping the value in the queries directory.
+```
+
+### Recording the audit trail
+
+The checklist's purpose is dual: gate the publish, and leave a machine-readable audit trail. For each item:
+
+- **For each PASSED check:** append the canonical check identifier (snake-case names listed below) to `summary.json.voice_audit.checks_passed` (held in working memory until Step 10 writes summary.json).
+- **For each FAILED check:** fix the violation inline in the draft (edit `reports/{run_date}.md` and the corresponding `markdown_body` string in working memory; do not advance to the assemble-dict step until the fix is applied), then append a structured entry to `summary.json.voice_audit.fixes_applied` with shape `{"section": "<section name>", "fix": "<one-line description of what was changed>"}`. Example: `{"section": "Patterns worth watching", "fix": "Replaced em dash with comma in framing of tool-tutorials trend"}`.
+
+### Canonical check identifiers
+
+These are the snake-case names to use in `voice_audit.checks_passed`:
+
+- `six_sections_in_order`
+- `empty_sections_render_with_explicit_body`
+- `stale_table_disclaimers_present`
+- `age_control_enforced`
+- `cross_age_window_labeled`
+- `trending_claims_have_minimum_age`
+- `confidence_labels_present`
+- `confidence_n_matches_comparison_set`
+- `confidence_thresholds_correct`
+- `no_em_dashes`
+- `no_en_dashes_as_punctuation`
+- `no_banned_vocab`
+- `no_formulaic_openers`
+- `first_person_plural_where_it_fits`
+- `no_prior_report_citation`
+- `multi_week_claims_self_contained`
+- `numbers_match_underlying_query_results`
+
+### Publish gate (RESEARCH.md Pitfall 3 mitigation)
+
+When all checks pass, proceed to Step 8 (Assemble the report dict) and from there to Step 9 (Invoke `write-notion-report`). Do NOT advance to the assemble-dict step while any item remains unticked. The Skill MUST NOT be invoked while any item remains unticked.
+
+If a check cannot be ticked because the data needed to verify it is unavailable or because the case genuinely falls outside the checklist's scope, record the reason in `summary.json.voice_audit.fixes_applied` with `section: "(audit)"` and `fix: "could not verify <check_identifier>: <reason>"`, and proceed only if the reason is genuinely outside the checklist's scope. Do not use this escape hatch to skip checks that could be verified with a little more work.
+
+A missing or empty `summary.json.voice_audit` block after a successful run indicates the self-audit step did not execute. That is visible after the fact even though enforcement is markdown, not code; it is itself a finding for the next run's analyst to investigate.
+
+## Step 8: Assemble the report dict
 
 Build a strict 8-key dict matching the `write-notion-report` Skill's input contract (defined in `.claude/skills/write-notion-report/SKILL.md`):
 
@@ -221,9 +299,9 @@ Build a strict 8-key dict matching the `write-notion-report` Skill's input contr
 - `open_questions`: `[]` (Phase 2 wires this).
 - `markdown_body`: the full report markdown from Step 6.
 
-Validate before Step 8: if any key is missing, do NOT invoke the Skill. Record `errors: [{"category": "report_dict_invalid", "message": "missing key: <name>", "step": "assemble_dict"}]` and proceed to Step 9 to write summary.json.
+Validate before Step 9: if any key is missing, do NOT invoke the Skill. Record `errors: [{"category": "report_dict_invalid", "message": "missing key: <name>", "step": "assemble_dict"}]` and proceed to Step 10 to write summary.json.
 
-## Step 8: Invoke write-notion-report (NOTION-01..06)
+## Step 9: Invoke write-notion-report (NOTION-01..06)
 
 Invoke the `write-notion-report` Skill with the assembled dict. The Skill returns one of:
 
@@ -234,7 +312,7 @@ Capture the return value. CRITICAL: do NOT fail the run if the Skill returns `ok
 
 If the Skill is not loaded in the session (the `.claude/skills/write-notion-report/SKILL.md` file is missing or the runtime did not pick it up), treat as `{"ok": false, "category": "skill_unavailable"}`, queue the operator message naming docs/runbook.md section "Notion write failed", and proceed to the write-summary step.
 
-## Step 9: Write summary.json (PERSIST-02, ERR-02)
+## Step 10: Write summary.json (PERSIST-02, ERR-02)
 
 Write `runs/{run_date}/summary.json` LAST, per the schema in `runs/README.md` (which includes the additive `transport` and `notion_url` fields the Phase 1 scaffold added). Full field set:
 
@@ -248,7 +326,8 @@ Write `runs/{run_date}/summary.json` LAST, per the schema in `runs/README.md` (w
 - `video_count_full_length`: row count from Step 3.
 - `queries_run`: list with `{"file": ..., "rows": ..., "ms": ...}` per query that actually executed.
 - `report_path`: `"reports/{run_date}.md"`.
-- `notion_write_ok`: boolean from Step 8.
+- `notion_write_ok`: boolean from Step 9.
+- `voice_audit`: `{"checks_passed": [string, ...], "fixes_applied": [{"section": string, "fix": string}, ...]}` from Step 7's self-audit. Both arrays MAY be empty if the audit ran cleanly and nothing needed fixing (improbable on early runs), but the `voice_audit` key itself MUST be present whenever Step 7 ran. A missing `voice_audit` after a successful run indicates Step 7 did not execute.
 - `notion_page_id`, `notion_url`: from the Skill-invoke step's success path; omit or set null on failure.
 - `prior_reports_consulted`: JSON array of `YYYY-MM-DD` strings recording which prior `reports/{date}.md` files were read during the prior-report calibration step (D-10). MAY be empty (`[]`) if fewer than three prior reports exist or none were consulted.
 - `errors`: list (may be empty); each entry `{"category": ..., "message": ..., "step": ...}`.
@@ -258,7 +337,7 @@ PERSIST-03 contract: the write order is queries -> report -> Skill -> summary.js
 
 Always write summary.json. Never skip it. This is the ERR-02 contract.
 
-## Step 10: Operator message
+## Step 11: Operator message
 
 Print exactly one of three patterns, then exit:
 
