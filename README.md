@@ -24,7 +24,7 @@ Every file in this repo is an exhibit of one of the four layers:
 
 | Layer | What it is in this repo |
 |---|---|
-| **1. Instructions** | `CLAUDE.md` — the analyzer's operating brain (voice, rules, hedging guidance). *Built live during the video, not committed.* |
+| **1. Instructions** | `CLAUDE.md` — the analyzer's operating brain (voice, rules, hedging guidance). Committed as the reference version; viewers who run Prompt 1 will draft their own and overwrite it. |
 | **2. Structure** | `BUSINESS_RULES.md` (imported from CLAUDE.md via `@BUSINESS_RULES.md`) + folder layout (`sql/`, `scripts/`, `images/`) |
 | **3. Tools** | BigQuery (`bq` CLI) for the data source; Notion (local MCP for terminal sessions + Claude web connector for cloud routines) for the output destination |
 | **4. Workflows** | The build pattern (GSD-driven planning, AI as doer + Kyle as project manager) + a Claude Code Skill (`write-notion-report`) + a scheduled `/schedule` routine that runs the analyzer every Monday at 9am Phoenix time |
@@ -186,7 +186,7 @@ channel-patterns-analyzer/
 ├── LICENSE                      ← MIT
 ├── BUSINESS_RULES.md            ← Layer 2 — stable analysis rules (imported from CLAUDE.md via @)
 ├── PROMPTS.md                   ← the 10 prompts that build the analyzer (follow along here)
-├── CLAUDE.md                    ← Layer 1 — analyzer voice (built live in the video; gitignored)
+├── CLAUDE.md                    ← Layer 1 — analyzer voice + reasoning rules (the reference draft from Prompt 1)
 ├── .env.example                 ← config template
 ├── .gitignore
 ├── requirements.txt
@@ -209,7 +209,6 @@ channel-patterns-analyzer/
 │   └── diagram-decision-tree.png
 │
 └── (gitignored — built during the video, not committed)
-    ├── CLAUDE.md                ← analyzer voice file
     ├── .claude/skills/write-notion-report/SKILL.md   ← the Skill built on camera
     ├── routine_config.json      ← /schedule routine config
     └── sample_data/             ← generated CSV fallback data
