@@ -69,4 +69,60 @@ For the What's working finding: pick the top row from Step 3 (highest view count
 
 Write the assembled markdown to `reports/{run_date}.md`. Also copy the same content to `runs/{run_date}/report.md` per the folder layout in `runs/README.md`.
 
-<!-- Steps 5-7 added in Task 2 -->
+## Step 5: Assemble the report dict
+
+Build a strict 8-key dict matching the `write-notion-report` Skill's input contract (defined in `.claude/skills/write-notion-report/SKILL.md`):
+
+- `run_date`: string `YYYY-MM-DD` (from Step 0).
+- `data_health`: `{"snapshot_dates": {table: date}, "stale_tables": [string, ...]}` (both built in Step 2).
+- `headline`: 1-2 sentence string from the headline drafted in Step 4.
+- `working`: list of `{title, body, confidence}` dicts. In Phase 1 this has exactly one entry (the top-videos finding from Step 3), with `confidence: "low"` per CONTEXT.md (this is a raw top-N reading, not a pattern claim).
+- `not_working`: `[]` (Phase 2 wires this).
+- `patterns`: `[]` (Phase 2 wires this).
+- `open_questions`: `[]` (Phase 2 wires this).
+- `markdown_body`: the full report markdown from Step 4.
+
+Validate before Step 6: if any key is missing, do NOT invoke the Skill. Record `errors: [{"category": "report_dict_invalid", "message": "missing key: <name>", "step": "assemble_dict"}]` and proceed to Step 7 to write summary.json.
+
+## Step 6: Invoke write-notion-report (NOTION-01..06)
+
+Invoke the `write-notion-report` Skill with the assembled dict. The Skill returns one of:
+
+- `{"ok": true, "page_id": "<uuid>", "url": "<notion url>"}` on success.
+- `{"ok": false, "error": "<string>", "category": "<env_missing|parent_not_found|permission_denied|transport_error|unknown>"}` on failure.
+
+Capture the return value. CRITICAL: do NOT fail the run if the Skill returns `ok: false`. Local artifacts already exist from Steps 2-4; Step 7 captures the Skill's failure in summary.json. The report has landed in `reports/{run_date}.md` regardless.
+
+If the Skill is not loaded in the session (the `.claude/skills/write-notion-report/SKILL.md` file is missing or the runtime did not pick it up), treat as `{"ok": false, "category": "skill_unavailable"}`, queue the operator message naming docs/runbook.md section "Notion write failed", and proceed to Step 7.
+
+## Step 7: Write summary.json (PERSIST-02, ERR-02)
+
+Write `runs/{run_date}/summary.json` LAST, per the schema in `runs/README.md` (which includes the additive `transport` and `notion_url` fields the Phase 1 scaffold added). Full field set:
+
+- `run_date`: from Step 0.
+- `run_started_at`, `run_finished_at`: ISO-8601 with Phoenix offset `-07:00`.
+- `data_source`: `"bigquery"` (Phase 1 is BQ-only; CSV-01 lands in Phase 3).
+- `transport`: `"bq_cli"` or `"bq_mcp"` from Step 1.
+- `bq_project`, `bq_dataset`: from `.env`.
+- `snapshot_dates`: from Step 2.
+- `stale_tables`: from Step 2.
+- `video_count_full_length`: row count from Step 3.
+- `queries_run`: list with `{"file": ..., "rows": ..., "ms": ...}` per query that actually executed.
+- `report_path`: `"reports/{run_date}.md"`.
+- `notion_write_ok`: boolean from Step 6.
+- `notion_page_id`, `notion_url`: from Step 6 success path; omit or set null on failure.
+- `errors`: list (may be empty); each entry `{"category": ..., "message": ..., "step": ...}`.
+
+PERSIST-03 contract: the write order is queries -> report -> Skill -> summary.json LAST. If any step in 2-6 throws, Step 7 still runs. Implementation: after each step that succeeds, append the cumulative state to `runs/{run_date}/.partial-state.json` (transient file, dot-prefixed). If any step throws, Step 7 reads `.partial-state.json`, merges in the captured error, writes the final `summary.json`, and deletes the partial file. The partial file lives only between throw and Step 7; it is never committed.
+
+Always write summary.json. Never skip it. This is the ERR-02 contract.
+
+## Step 8: Operator message
+
+Print exactly one of three patterns, then exit:
+
+- SUCCESS: `Run {run_date} complete. Notion: {url}. Local: reports/{run_date}.md`
+- NOTION-FAIL: `Run {run_date} complete locally but Notion write failed: {category}. Recovery: see docs/runbook.md § 'Notion write failed'. Local: reports/{run_date}.md`
+- BQ-FAIL: `Run {run_date} FAILED at {step}: {error}. Recovery: see docs/runbook.md § '{relevant section}'.`
+
+The three patterns are exhaustive: every run finishes with one of them. For BQ-FAIL, the relevant docs/runbook.md section is one of "BigQuery auth failure", "Required table is missing or empty", or "A required table is stale", chosen by the error category recorded in Step 2 or Step 3.
