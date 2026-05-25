@@ -444,6 +444,7 @@ Self-audit progress:
 - [ ] No en dashes (U+2013) used as punctuation
 - [ ] None of the banned vocabulary list from CLAUDE.md § Voice appears: leverage, robust, seamless, navigate, delve, transformative, elevated, etc. (full list is in CLAUDE.md § "Voice")
 - [ ] No formulaic openers ("Great news!", "Overall,", "In conclusion,", contrastive "Not X, Y" reframes)
+- [ ] First-person plural ("we tried", "what we are seeing") used where it fits per CLAUDE.md § Voice
 - [ ] No prior-report citation in prose ("as we said last week", "the prior report", "as noted")
 - [ ] Multi-week claims (if any) stand on their own without requiring reader to have seen prior reports
 - [ ] Stale-table downstream impact disclaimed in every dependent section (one collapsed disclaimer per section preferred)
@@ -495,6 +496,7 @@ is forbidden.
       "no_em_dashes",
       "no_banned_vocab",
       "no_formulaic_openers",
+      "first_person_plural_where_it_fits",
       "no_prior_report_citation",
       "stale_table_disclaimers_present"
     ],
@@ -538,27 +540,27 @@ Planner: if Phase 1 has already shipped a `summary.json` writer, this is an addi
 
 **A2, A3, A5 are the assumptions to flag in the plan as "verify against Phase 1's actual implementation."** The other items are confirmed.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Does Notion's `markdown` body param preserve inline parentheticals cleanly?**
    - What we know: The `markdown` param exists, markdown tables map to native Notion tables, the doc explicitly covers block-level handling [CITED: developers.notion.com/guides/data-apis/working-with-markdown-content].
    - What's unclear: Whether `(moderate confidence, n=7)` survives without being auto-formatted (italicized, bolded, or stripped). The Notion API doc doesn't address inline behavior.
-   - Recommendation: Phase 2's first real run is the test. If parentheticals mangle, escalate to Phase 1's Skill owner to switch to the `children` parameter (explicit `paragraph` block with `rich_text` array of plain-text segments).
+   - RESOLVED: Phase 2's first real run is the test. If parentheticals mangle, escalate to Phase 1's Skill owner to switch to the `children` parameter (explicit `paragraph` block with `rich_text` array of plain-text segments).
 
 2. **Is Phase 1's recipe extension point clean enough for the three insertions?**
    - What we know: `01-CONTEXT.md` D-02 says ~80–150 lines of linear markdown; D-04 says "self-audit is a recipe step, not a Skill invocation."
    - What's unclear: Whether Phase 1's draft step is monolithic or already broken into sub-steps the planner can insert between. Depends on Phase 1's final shape.
-   - Recommendation: Plan the three new steps assuming a clean seam; flag the refactor as a fallback contingency in the plan.
+   - RESOLVED: Plan the three new steps assuming a clean seam; flag the refactor as a fallback contingency in the plan.
 
 3. **Should `eligible_count` be its own SQL file (`sql/05_*.sql`) or stay inline in the recipe?**
    - What we know: The numeric-prefix convention from `docs/maintenance.md` welcomes new files; an inline `bq query` works too.
    - What's unclear: Which the planner / Kyle prefers for navigability vs. file count.
-   - Recommendation: Default to inline (simpler, no new file, no new CHANGELOG entry beyond the rule-enforcement one). Planner may promote it to `sql/05_eligible_video_count.sql` if the recipe gets crowded.
+   - RESOLVED: Default to inline (simpler, no new file, no new CHANGELOG entry beyond the rule-enforcement one). Planner may promote it to `sql/05_eligible_video_count.sql` if the recipe gets crowded.
 
 4. **Do same-day retries (`YYYY-MM-DD-2.md`) count toward the 3-most-recent prior-report read?**
    - What we know: Lexicographic sort would place `2026-05-24-2.md` after `2026-05-24.md` and before `2026-05-25.md`.
    - What's unclear: Whether a retry of today's run "counts" as a prior report or as the current run-in-progress.
-   - Recommendation: Filter out files whose date prefix matches the current run date before taking the top 3. The retry is part of "this run", not the calibration archive. Self-audit checklist item: "prior_reports_consulted does not include today's run".
+   - RESOLVED: Filter out files whose date prefix matches the current run date before taking the top 3. The retry is part of "this run", not the calibration archive. Self-audit checklist item: "prior_reports_consulted does not include today's run".
 
 ## Environment Availability
 

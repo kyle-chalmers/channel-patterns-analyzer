@@ -55,9 +55,16 @@
   5. Report prose passes the voice rules — no em dashes, none of the banned vocabulary, no formulaic openers or closers, first-person plural where it fits
 
 **Plans:** 3 plans
+**Wave 1**
 
 - [ ] 02-01-PLAN.md — Fix sql/02, sql/03, sql/04 (Phoenix tz + latest-common-snapshot CTE + remove LIMIT 20) per D-05; verify Phase 1 dependency assumptions
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 02-02-PLAN.md — Extend /run-analyzer recipe with prior-report read step, eligible-count step, and reworked draft step (six sections, inline confidence labels, stale-table disclaimers)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 02-03-PLAN.md — Insert self-audit step (D-01 Layer 2) between draft and publish; extend summary.json schema with voice_audit
 
 ### Phase 3: CSV Parity and Operational Polish
