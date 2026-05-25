@@ -54,10 +54,10 @@
   4. Before drafting, the analyzer reads the three most recent `reports/{date}.md` files and uses them to calibrate confidence and avoid restating prior findings verbatim
   5. Report prose passes the voice rules — no em dashes, none of the banned vocabulary, no formulaic openers or closers, first-person plural where it fits
 
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 **Wave 1**
 
-- [ ] 02-01-PLAN.md — Fix sql/02, sql/03, sql/04 (Phoenix tz + latest-common-snapshot CTE + remove LIMIT 20) per D-05; verify Phase 1 dependency assumptions
+- [x] 02-01-PLAN.md — Fix sql/02, sql/03, sql/04 (Phoenix tz + latest-common-snapshot CTE + remove LIMIT 20) per D-05; verify Phase 1 dependency assumptions
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -87,7 +87,7 @@
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. First Notion Report End-to-End | 4/4 | Complete   | 2026-05-25 |
-| 2. Honest Analyst Depth | 0/3 | Not started | - |
+| 2. Honest Analyst Depth | 1/3 | In Progress|  |
 | 3. CSV Parity and Operational Polish | 0/0 | Not started | - |
 
 ## Coverage Summary
