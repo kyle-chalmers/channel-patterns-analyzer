@@ -1,38 +1,51 @@
 -- ─── Age-controlled performance comparison ───────────────────
--- Per BUSINESS_RULES.md §3: when comparing videos, control for age.
+-- Per CLAUDE.md § "Age control is non-negotiable": when comparing videos, control for age.
 -- This query computes views per day since publish for each full-length video,
 -- excluding any video published less than 14 days ago (low-confidence per the rule).
 --
 -- Dataset name: bare `youtube_analytics.<table>` form; replace if your dataset
 -- has a different name (see header of sql/01_latest_snapshot_overview.sql).
 --
+-- Timezone: CURRENT_DATE("America/Phoenix") aligns date math with the upstream
+-- youtube-bigquery-pipeline scheduler. See BUSINESS_RULES.md § "Data health expectations".
+--
+-- Latest-common-snapshot logic: takes MIN(MAX(snapshot_date)) across video_metadata
+-- and daily_video_stats so we never join a metadata row at a date where stats
+-- haven't arrived yet (which would silently drop rows). Scope is the two joined
+-- tables only; extension to all four analytics tables is deferred (see sql/01
+-- and Phase 2 D-06).
+--
 -- IMPORTANT: `views_per_day_since_publish_proxy` is a PROXY for the strict
--- first-30-day normalization required by BUSINESS_RULES.md §3 — it averages
--- across the entire post-publish window rather than computing views in the
--- first 30 days specifically. For the strict rule, compute the delta between
--- the snapshot at publish + 30 days vs. snapshot at publish (requires
+-- first-30-day normalization required by CLAUDE.md § "Age control is non-negotiable"
+-- — it averages across the entire post-publish window rather than computing
+-- views in the first 30 days specifically. For the strict rule, compute the delta
+-- between the snapshot at publish + 30 days vs. snapshot at publish (requires
 -- per-snapshot row history). Use this proxy when that history is unavailable
 -- or when a relative ranking is good enough; label results as a proxy in
 -- the report.
 
-WITH base AS (
+WITH latest_common AS (
+    SELECT LEAST(
+        (SELECT MAX(snapshot_date) FROM `youtube_analytics.video_metadata`),
+        (SELECT MAX(snapshot_date) FROM `youtube_analytics.daily_video_stats`)
+    ) AS snapshot_date
+),
+base AS (
     SELECT
         m.video_id,
         m.title,
         m.duration_formatted,
         m.published_at,
-        DATE_DIFF(CURRENT_DATE('America/Phoenix'), DATE(m.published_at), DAY) AS days_since_published,
+        DATE_DIFF(CURRENT_DATE("America/Phoenix"), DATE(m.published_at), DAY) AS days_since_published,
         s.view_count,
         s.like_count,
         s.comment_count
     FROM `youtube_analytics.video_metadata` m
     JOIN `youtube_analytics.daily_video_stats` s
         USING (video_id, snapshot_date)
-    WHERE m.snapshot_date = (
-        SELECT MAX(snapshot_date) FROM `youtube_analytics.video_metadata`
-    )
+    WHERE m.snapshot_date = (SELECT snapshot_date FROM latest_common)
         AND m.video_type = 'full_length'
-        AND DATE_DIFF(CURRENT_DATE('America/Phoenix'), DATE(m.published_at), DAY) >= 14
+        AND DATE_DIFF(CURRENT_DATE("America/Phoenix"), DATE(m.published_at), DAY) >= 14
 )
 SELECT
     title,
@@ -43,5 +56,4 @@ SELECT
     SAFE_DIVIDE(like_count, view_count) * 100 AS like_rate_pct,
     SAFE_DIVIDE(comment_count, view_count) * 100 AS comment_rate_pct
 FROM base
-ORDER BY views_per_day_since_publish_proxy DESC
-LIMIT 20;
+ORDER BY views_per_day_since_publish_proxy DESC;

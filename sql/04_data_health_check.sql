@@ -1,20 +1,22 @@
 -- ─── Data health check ───────────────────────────────────────
--- Per BUSINESS_RULES.md §5: surface the latest snapshot date for every analytics
--- table, plus the staleness in days. The analyzer must include this in a Data
--- Health section at the top of every report, flagging any table more than 3 days stale.
+-- Per BUSINESS_RULES.md § "Data health expectations": surface the latest snapshot
+-- date for every analytics table, plus the staleness in days. The analyzer must
+-- include this in a Data Health section at the top of every report, flagging any
+-- table more than 3 days stale.
 --
 -- Dataset name: bare `youtube_analytics.<table>` form; replace if your dataset
 -- has a different name (see header of sql/01_latest_snapshot_overview.sql).
 --
--- Timezone: CURRENT_DATE() defaults to UTC in BigQuery. If your scheduling
--- timezone differs (e.g., America/Phoenix for the youtube-bigquery-pipeline
--- scheduler), use CURRENT_DATE("America/Phoenix") below to align the staleness
--- window with your actual ingest schedule.
+-- Timezone: Phoenix (America/Phoenix) is canonical for this analyzer; it is
+-- the upstream youtube-bigquery-pipeline scheduler's timezone, so the staleness
+-- window stays aligned with the actual ingest schedule. The four DATE_DIFF
+-- calls below pass the Phoenix-tz string explicitly. See BUSINESS_RULES.md
+-- § "Data health expectations".
 
 SELECT
     'video_metadata' AS table_name,
     MAX(snapshot_date) AS latest_snapshot,
-    DATE_DIFF(CURRENT_DATE('America/Phoenix'), MAX(snapshot_date), DAY) AS days_stale
+    DATE_DIFF(CURRENT_DATE("America/Phoenix"), MAX(snapshot_date), DAY) AS days_stale
 FROM `youtube_analytics.video_metadata`
 
 UNION ALL
@@ -22,7 +24,7 @@ UNION ALL
 SELECT
     'daily_video_stats' AS table_name,
     MAX(snapshot_date) AS latest_snapshot,
-    DATE_DIFF(CURRENT_DATE('America/Phoenix'), MAX(snapshot_date), DAY) AS days_stale
+    DATE_DIFF(CURRENT_DATE("America/Phoenix"), MAX(snapshot_date), DAY) AS days_stale
 FROM `youtube_analytics.daily_video_stats`
 
 UNION ALL
@@ -30,7 +32,7 @@ UNION ALL
 SELECT
     'daily_video_analytics' AS table_name,
     MAX(snapshot_date) AS latest_snapshot,
-    DATE_DIFF(CURRENT_DATE('America/Phoenix'), MAX(snapshot_date), DAY) AS days_stale
+    DATE_DIFF(CURRENT_DATE("America/Phoenix"), MAX(snapshot_date), DAY) AS days_stale
 FROM `youtube_analytics.daily_video_analytics`
 
 UNION ALL
@@ -38,7 +40,7 @@ UNION ALL
 SELECT
     'daily_traffic_sources' AS table_name,
     MAX(snapshot_date) AS latest_snapshot,
-    DATE_DIFF(CURRENT_DATE('America/Phoenix'), MAX(snapshot_date), DAY) AS days_stale
+    DATE_DIFF(CURRENT_DATE("America/Phoenix"), MAX(snapshot_date), DAY) AS days_stale
 FROM `youtube_analytics.daily_traffic_sources`
 
 ORDER BY days_stale DESC;
