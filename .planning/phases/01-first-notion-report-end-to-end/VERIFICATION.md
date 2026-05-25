@@ -1,7 +1,7 @@
 ---
 phase: 01-first-notion-report-end-to-end
 verified: 2026-05-25T12:00:00-07:00
-status: human_needed
+status: pass
 score: 17/17 must-haves verified (with 1 latent recipe defect documented as Phase-2 inheritance, not a Phase-1 blocker)
 re_verification: null
 overrides_applied: 0
@@ -26,7 +26,7 @@ deferred:
 **Phase Goal:** A single command-driven Claude Code session pulls real BigQuery data, writes a minimal but correctly-structured report to disk, and publishes a child page on the channel-patterns Notion page via a new project-local Skill.
 
 **Verified:** 2026-05-25
-**Status:** human_needed (passing with 2 small human-confirmation items)
+**Status:** pass (both human-confirmation items resolved 2026-05-25: Notion page eyeball confirmed by operator inline during Task 2; recipe-defect reproducibility confirmed by `runs/2026-05-25/queries/data_health.stderr` captured in commit `561ac5c`, which contains the RecursionError trace from the as-written `bq query ... "$SQL"` invocation. Phase 2 must still fix the recipe per inheritance notes.)
 **Re-verification:** No, initial verification
 
 ---
