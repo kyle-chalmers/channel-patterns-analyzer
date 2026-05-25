@@ -76,6 +76,22 @@ Then re-run the analyzer.
 
 ---
 
+## Required environment variable is missing
+
+**Symptom.** The `/run-analyzer` recipe stops at Step 0 preflight with `errors: [{"category": "env_missing", "message": "<NAME> not set", "step": "preflight"}]` in `runs/{run_date}/summary.json`. The recipe never reaches the BigQuery transport probe.
+
+**Which variable, and how to fix it.**
+
+- `NOTION_REPORT_PAGE_ID`. Open the channel-patterns parent page in Notion, copy the page ID from the URL (`notion.so/<workspace>/<page-id>` — the `<page-id>` portion), and add it to `.env` (gitignored). Both dashed and undashed UUID forms are accepted.
+- `BQ_PROJECT`. Run `gcloud config set project <id>` to set it for the active gcloud config, or set `BQ_PROJECT=<id>` explicitly in `.env`. The recipe reads from `.env` first.
+- `BQ_DATASET`. Defaults to `youtube_analytics` if unset. Set it in `.env` only if the dataset is named differently.
+
+**What the analyzer does.** Writes a minimal `runs/{run_date}/summary.json` with the `env_missing` error so the audit trail still exists, surfaces an operator message pointing here, and stops. No queries run, no Notion call, no report drafted.
+
+**Recording.** If the missing variable points to a setup-doc gap (the operator could not figure out which value to use from the project docs), file a `CHANGELOG.md` entry naming the doc that needs to be expanded. Phase 3 (ERR-01) widens runbook coverage to all error categories; this section closes the loop for the one preflight failure the recipe surfaces today.
+
+---
+
 ## Report says something the operator believes is wrong
 
 **Symptom.** A claim in the published report doesn't match Kyle's reading of the channel.
