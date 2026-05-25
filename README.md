@@ -27,7 +27,7 @@ Every file in this repo is an exhibit of one of the four layers:
 | **1. Instructions** | `CLAUDE.md` — the analyzer's operating brain (voice, rules, hedging guidance). Committed as the reference version; viewers who run Prompt 1 will draft their own and overwrite it. |
 | **2. Structure** | `BUSINESS_RULES.md` (imported from CLAUDE.md via `@BUSINESS_RULES.md`) + folder layout (`sql/`, `scripts/`, `images/`) |
 | **3. Tools** | BigQuery (`bq` CLI) for the data source; Notion (local MCP for terminal sessions + Claude web connector for cloud routines) for the output destination |
-| **4. Workflows** | The build pattern (GSD-driven planning, AI as doer + Kyle as project manager) + a Claude Code Skill (`write-notion-report`) + a scheduled `/schedule` routine that runs the analyzer every Monday at 9am Phoenix time |
+| **4. Workflows** | The build pattern (GSD-driven planning, AI as doer + Kyle as project manager) + a Claude Code Skill (`write-notion-report`) + a scheduled `/schedule` routine that runs the analyzer every Monday at 9am Phoenix time + a persistent `reports/` archive and `runs/` audit trail so each weekly run leaves a durable record (see [Persistent structure](#persistent-structure)) |
 
 Without all four, this would be a chatbot. With all four, it runs without me.
 
@@ -187,6 +187,7 @@ channel-patterns-analyzer/
 ├── BUSINESS_RULES.md            ← Layer 2 — stable analysis rules (imported from CLAUDE.md via @)
 ├── PROMPTS.md                   ← the 10 prompts that build the analyzer (follow along here)
 ├── CLAUDE.md                    ← Layer 1 — analyzer voice + reasoning rules (the reference draft from Prompt 1)
+├── CHANGELOG.md                 ← material changes to rules, queries, or behavior (one line per change)
 ├── .env.example                 ← config template
 ├── .gitignore
 ├── requirements.txt
@@ -202,6 +203,10 @@ channel-patterns-analyzer/
 ├── scripts/                     ← utility scripts
 │   └── csv_fallback_loader.py   ← generate sample data for non-BQ users
 │
+├── reports/                     ← Layer 4 persistence — weekly markdown reports, one per run date
+├── runs/                        ← Layer 4 persistence — per-run audit trail (snapshot dates, query results, errors)
+├── docs/                        ← operator manual — runbook, maintenance, schedule
+│
 ├── images/
 │   ├── diagram.excalidraw       ← 4-layer Context Engineering (architecture)
 │   ├── diagram.png              ← rendered + KC Labs branded
@@ -213,6 +218,28 @@ channel-patterns-analyzer/
     ├── routine_config.json      ← /schedule routine config
     └── sample_data/             ← generated CSV fallback data
 ```
+
+---
+
+## Persistent structure
+
+Each weekly run leaves a durable record on disk, not just in Notion. Three folders + a changelog make the analyzer sustainably maintainable — and let viewers of this repo see the analyzer's actual output history over time.
+
+```
+reports/{YYYY-MM-DD}.md         ← the weekly report, same content sent to Notion
+runs/{YYYY-MM-DD}/
+    summary.json                ← snapshot dates, video count, query row counts, errors
+    queries/*.json              ← raw SQL results (small enough to commit)
+    report.md                   ← mirror of the report, kept here so the run folder is self-contained
+docs/runbook.md                 ← what to do when something breaks
+docs/maintenance.md             ← how to add a query, evolve a rule, retire a pattern
+docs/schedule.md                ← how the weekly /schedule routine fires
+CHANGELOG.md                    ← log of material changes to rules/queries/behavior
+```
+
+The analyzer reads recent `reports/` entries to calibrate confidence over time without breaking the standalone-tone rule. The `runs/` audit trail is what makes a surprising report answerable months later. The `docs/` folder is the operator manual that keeps the repo runnable when nobody's touched it in three months.
+
+See `reports/README.md`, `runs/README.md`, and `docs/README.md` for details.
 
 After the video, fork this repo and run through the prompts yourself — you'll generate your own versions of all four live-built artifacts.
 
