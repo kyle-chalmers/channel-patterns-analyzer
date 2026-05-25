@@ -8,7 +8,7 @@
 ## Phases
 
 - [x] **Phase 1: First Notion Report End-to-End** — Smallest viable analyzer run: data-health check + one BigQuery pull + minimal report + `write-notion-report` Skill produces a real child page on the channel-patterns Notion page (completed 2026-05-25)
-- [ ] **Phase 2: Honest Analyst Depth** — Age control, small-sample hedging, six-section structure, prior-report calibration, and voice rules applied so the published report meets the CLAUDE.md bar
+- [x] **Phase 2: Honest Analyst Depth** — Age control, small-sample hedging, six-section structure, prior-report calibration, and voice rules applied so the published report meets the CLAUDE.md bar (completed 2026-05-25)
 - [ ] **Phase 3: CSV Parity and Operational Polish** — `DATA_SOURCE=csv` reaches feature parity, weekly `/schedule` routine documented for local + cloud, runbook covers every failure mode encountered during the build
 
 ## Phase Details
@@ -54,7 +54,7 @@
   4. Before drafting, the analyzer reads the three most recent `reports/{date}.md` files and uses them to calibrate confidence and avoid restating prior findings verbatim
   5. Report prose passes the voice rules — no em dashes, none of the banned vocabulary, no formulaic openers or closers, first-person plural where it fits
 
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 **Wave 1**
 
 - [x] 02-01-PLAN.md — Fix sql/02, sql/03, sql/04 (Phoenix tz + latest-common-snapshot CTE + remove LIMIT 20) per D-05; verify Phase 1 dependency assumptions
@@ -65,7 +65,7 @@
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 02-03-PLAN.md — Insert self-audit step (D-01 Layer 2) between draft and publish; extend summary.json schema with voice_audit
+- [x] 02-03-PLAN.md — Insert self-audit step (D-01 Layer 2) between draft and publish; extend summary.json schema with voice_audit
 
 ### Phase 3: CSV Parity and Operational Polish
 
@@ -87,7 +87,7 @@
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. First Notion Report End-to-End | 4/4 | Complete   | 2026-05-25 |
-| 2. Honest Analyst Depth | 2/3 | In Progress|  |
+| 2. Honest Analyst Depth | 3/3 | Complete   | 2026-05-25 |
 | 3. CSV Parity and Operational Polish | 0/0 | Not started | - |
 
 ## Coverage Summary
