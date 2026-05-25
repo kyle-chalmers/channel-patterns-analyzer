@@ -21,7 +21,7 @@ WITH base AS (
         m.title,
         m.duration_formatted,
         m.published_at,
-        DATE_DIFF(CURRENT_DATE(), DATE(m.published_at), DAY) AS days_since_published,
+        DATE_DIFF(CURRENT_DATE('America/Phoenix'), DATE(m.published_at), DAY) AS days_since_published,
         s.view_count,
         s.like_count,
         s.comment_count
@@ -32,7 +32,7 @@ WITH base AS (
         SELECT MAX(snapshot_date) FROM `youtube_analytics.video_metadata`
     )
         AND m.video_type = 'full_length'
-        AND DATE_DIFF(CURRENT_DATE(), DATE(m.published_at), DAY) >= 14
+        AND DATE_DIFF(CURRENT_DATE('America/Phoenix'), DATE(m.published_at), DAY) >= 14
 )
 SELECT
     title,

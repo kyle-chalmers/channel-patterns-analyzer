@@ -30,7 +30,7 @@ The user opted to discuss only the run-trigger area; the following are open for 
 
 - **Notion Skill input contract (NOTION-02).** Default to a **strict dict** with keys (`run_date`, `data_health`, `headline`, `working[]`, `not_working[]`, `patterns[]`, `open_questions[]`, `markdown_body`). Rationale: strict shape is more testable and makes Notion block rendering deterministic. Planner may revise if the researcher surfaces a cleaner contract from Claude Code Skill conventions.
 - **Phase-1 report depth.** Default to **Data Health + Headline + one "What's working" finding** sourced from `sql/02_top_full_length_videos.sql`. Enough content to prove end-to-end (≥3 sections) without dragging Phase 2's analytical work into Phase 1. The other report sections (What's not working, Patterns, Open questions) may be empty placeholders in Phase 1 — clearly labeled as such, not silently omitted.
-- **Notion page model + MCP tool choice.** Default to: title format `"Weekly report — {run_date}"`; each run appends a child page under the parent referenced by `NOTION_PAGE_ID`; parent page accumulates a running list of child links (no summary table in Phase 1). Skill calls `mcp__notion__notion-create-pages` (or the equivalent cloud-connector tool) with the parent ref from `NOTION_PAGE_ID`. Researcher should verify the exact tool name and parent-ref shape against the Notion MCP currently installed.
+- **Notion page model + MCP tool choice.** Default to: title format `"Weekly report — {run_date}"`; each run appends a child page under the parent referenced by `NOTION_REPORT_PAGE_ID`; parent page accumulates a running list of child links (no summary table in Phase 1). Skill calls `mcp__notion__notion-create-pages` (or the equivalent cloud-connector tool) with the parent ref from `NOTION_REPORT_PAGE_ID`. Researcher should verify the exact tool name and parent-ref shape against the Notion MCP currently installed.
 
 </decisions>
 
@@ -60,7 +60,7 @@ The user opted to discuss only the run-trigger area; the following are open for 
 - `docs/runbook.md` — Failure-mode playbook. Phase 1 must surface bq-auth and Notion-write failures with actionable messages that map here.
 
 ### Tool/integration context
-- `.env.example` — Existing env-var template. Phase 1 adds `NOTION_PAGE_ID` to it.
+- `.env.example` — Existing env-var template. Phase 1 adds `NOTION_REPORT_PAGE_ID` to it.
 - `README.md` §3.1–3.6 — gcloud + bq CLI setup walkthrough (already shipped). Phase 1 may need to add a Notion-side equivalent section.
 - `.planning/codebase/STRUCTURE.md` — Directory layout, where new files belong.
 - `.planning/codebase/STACK.md` — Confirms bq CLI + Claude Code Skill stack; Notion MCP is the handoff transport.

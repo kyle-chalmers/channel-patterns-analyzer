@@ -28,7 +28,7 @@ Then re-run the analyzer.
 
 ## A required table is stale
 
-**Symptom.** The Data Health section of the report flags a table whose latest `snapshot_date` is older than `CURRENT_DATE() - 3` (per `BUSINESS_RULES.md` §5).
+**Symptom.** The Data Health section of the report flags a table whose latest `snapshot_date` is older than `CURRENT_DATE() - 3` (per `BUSINESS_RULES.md` §3).
 
 **What the analyzer should do.** Surface staleness at the top of the report and label any downstream finding that depends on the stale table. Do not silently produce a report that quietly relies on stale data.
 
@@ -44,7 +44,7 @@ Then re-run the analyzer.
 
 **What the analyzer should do.** Stop. Report the missing/empty table in the Data Health section. Do not invent a report from the tables that do exist.
 
-**Fix.** Verify the dataset name (`BQ_DATASET`, defaults to `youtube_analytics`) and the table list in `BUSINESS_RULES.md` §6 still match what's in BigQuery. If the upstream pipeline renamed something, update `sql/` and add a `CHANGELOG.md` entry.
+**Fix.** Verify the dataset name (`BQ_DATASET`, defaults to `youtube_analytics`) and the table list in `BUSINESS_RULES.md` §4 still match what's in BigQuery. If the upstream pipeline renamed something, update `sql/` and add a `CHANGELOG.md` entry.
 
 ---
 
@@ -54,8 +54,8 @@ Then re-run the analyzer.
 
 **What to do.**
 
-1. Re-read `BUSINESS_RULES.md` §6 — table grain and join keys — and compare against the current BigQuery schema (`bq show --schema <dataset>.<table>`).
-2. If the schema genuinely changed upstream, update `sql/`, update `BUSINESS_RULES.md` §6, and add a `CHANGELOG.md` entry naming the schema change and which queries were touched.
+1. Re-read `BUSINESS_RULES.md` §4 — table grain and join keys — and compare against the current BigQuery schema (`bq show --schema <dataset>.<table>`).
+2. If the schema genuinely changed upstream, update `sql/`, update `BUSINESS_RULES.md` §4, and add a `CHANGELOG.md` entry naming the schema change and which queries were touched.
 3. If the schema didn't change but a query is wrong, that's a code fix in `sql/` only — still log it in `CHANGELOG.md` if it would change a future report's numbers.
 
 **Don't silently coerce types or swallow new columns.** The whole analyzer is built on the assumption that the data contract is stable; drift should be loud.
