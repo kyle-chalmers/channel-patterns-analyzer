@@ -8,16 +8,26 @@ This repo is the companion to the video. Watching is not required — the README
 
 ---
 
+## Which layer is your bottleneck?
+
+Before you read further, here's a quick self-diagnostic. If AI keeps failing you in one of these ways, that's the layer to invest in first.
+
+![Decision tree: which layer is your bottleneck?](./images/diagram-decision-tree.png)
+
+This repo demonstrates all four layers in one sustained build. Pick a layer you're stuck on and read its section first.
+
+---
+
 ## The 4 layers, embodied
 
 Every file in this repo is an exhibit of one of the four layers:
 
 | Layer | What it is in this repo |
 |---|---|
-| **1. Instructions** | `CLAUDE.md` — the analyzer's operating brain (voice, rules, hedging guidance) |
+| **1. Instructions** | `CLAUDE.md` — the analyzer's operating brain (voice, rules, hedging guidance). *Built live during the video, not committed.* |
 | **2. Structure** | `BUSINESS_RULES.md` (imported from CLAUDE.md via `@BUSINESS_RULES.md`) + folder layout (`sql/`, `scripts/`, `images/`) |
 | **3. Tools** | BigQuery (`bq` CLI) for the data source; Notion (local MCP for terminal sessions + Claude web connector for cloud routines) for the output destination |
-| **4. Workflows** | The build pattern (GSD-driven planning, AI as doer + Kyle as project manager) + a Claude Code Skill (`write-notion-report`) + a scheduled `/schedule` routine that runs the analyzer every Monday at 9am |
+| **4. Workflows** | The build pattern (GSD-driven planning, AI as doer + Kyle as project manager) + a Claude Code Skill (`write-notion-report`) + a scheduled `/schedule` routine that runs the analyzer every Monday at 9am Phoenix time |
 
 Without all four, this would be a chatbot. With all four, it runs without me.
 
@@ -73,45 +83,64 @@ Data flow:
 
 ## Setup
 
-1. **Clone the repo:**
-   ```bash
-   git clone https://github.com/kyle-chalmers/channel-patterns-analyzer.git
-   cd channel-patterns-analyzer
-   ```
+### 1. Clone and configure
 
-2. **Copy and configure environment:**
-   ```bash
-   cp .env.example .env
-   # Edit .env: set BQ_PROJECT, BQ_DATASET, and any Notion credentials
-   ```
+```bash
+git clone https://github.com/kyle-chalmers/channel-patterns-analyzer.git
+cd channel-patterns-analyzer
+cp .env.example .env
+# Edit .env: set BQ_PROJECT, BQ_DATASET, NOTION_REPORT_PAGE_ID, and DATA_SOURCE
+```
 
-3. **Install Python dependencies (only needed for the CSV fallback path):**
-   ```bash
-   pip install -r requirements.txt
-   ```
+### 2. Install Python dependencies (only needed for the CSV fallback path)
 
-4. **Verify BigQuery access:**
-   ```bash
-   bq query --use_legacy_sql=false 'SELECT COUNT(*) FROM `youtube_analytics.video_metadata` WHERE snapshot_date = CURRENT_DATE()'
-   ```
+```bash
+pip install -r requirements.txt
+```
 
-5. **Configure Notion both ways** (per the video's Section 4):
-   - **Local MCP** (terminal sessions): add the Notion MCP server to your Claude Code config — `claude mcp add notion --transport http https://mcp.notion.com/mcp`
-   - **Web connector** (scheduled routines): in your Anthropic account, go to Connectors and add Notion. This is what cloud routines see.
+### 3. Verify BigQuery access
 
-6. **(Optional) Install GSD if you want to follow the video's build flow:**
-   ```bash
-   claude
-   > "Install the GSD framework globally on this machine. Walk me through what you are doing as you do it."
-   ```
+The SQL files in `sql/` reference the dataset by its bare name (`youtube_analytics.video_metadata` etc.) because the **project** comes from your active gcloud config, not from the SQL. Set your project before running queries:
+
+```bash
+gcloud config set project "$BQ_PROJECT"
+bq query --use_legacy_sql=false \
+  "SELECT COUNT(*) FROM \`${BQ_DATASET:-youtube_analytics}.video_metadata\` WHERE snapshot_date = CURRENT_DATE()"
+```
+
+If your dataset has a name other than `youtube_analytics`, update the SQL files (one-line replace) or have the analyzer template the dataset name from `BQ_DATASET` when it queries.
+
+### 4. Configure Notion — both ways
+
+The video demos two paths because cloud routines and terminal sessions see different surfaces:
+
+- **Local MCP** (terminal sessions): your local Claude Code talks to Notion via an MCP server. The exact install command depends on the current Notion MCP distribution (check [notion.com/integrations](https://www.notion.com/integrations) — at recording time, verify with `claude mcp add notion <official-url-or-npx-cmd>` against current docs).
+- **Web connector** (scheduled routines): in your Anthropic account at [claude.com](https://claude.com), go to Connectors → add Notion. Cloud routines see this; they do NOT see your local MCP config.
+
+### 5. Scheduling: cloud setup ≠ local setup
+
+If you're running the analyzer locally, the steps above are enough. If you want to wrap it as a scheduled routine, the cloud environment is its own thing:
+
+- Routines run on Anthropic's infrastructure, not your laptop.
+- They need: the repo selected, environment variables defined per-routine, the Notion Claude connector (web), and BigQuery credentials that work without your local `gcloud` login (e.g., a service account key passed via env var).
+- See the [Anthropic routines docs](https://code.claude.com/docs/en/routines) for the cloud-env configuration screen.
+
+A routine that "works locally" will fail in the cloud if any of the above isn't scoped. Verify in the Anthropic UI before the routine's first scheduled fire.
+
+### 6. (Optional) Install GSD to follow the video's build flow
+
+```bash
+claude
+> "Install the GSD framework globally on this machine. Walk me through what you are doing as you do it."
+```
 
 ---
 
 ## Demo prompt
 
-The whole analyzer is built via a sequence of prompts inside Claude Code with GSD. The full prompt list is in [the video's PROMPTS REFERENCE section](#) (see the description for a link to the script).
+The whole analyzer is built via a sequence of prompts inside Claude Code with GSD. The full prompt list is in the companion video (link in the description after the video publishes).
 
-Quick start:
+Quick start (Prompt 5 in the video):
 
 ```text
 /gsd:new-project a YouTube channel pattern analyzer. Connect to my youtube_analytics
@@ -141,6 +170,12 @@ python scripts/csv_fallback_loader.py
 
 This creates `sample_data/` with the same schema as the BigQuery tables, sized to be representative without being huge.
 
+To make the analyzer use CSVs instead of BigQuery, set `DATA_SOURCE=csv` in your `.env` AND, when you're prompting GSD to build the analyzer, add:
+
+> "Respect the DATA_SOURCE environment variable. If it is `csv`, read from `./sample_data/*.csv` instead of querying BigQuery. The CSV schemas match the BQ table schemas exactly. If it is `bigquery` (or unset), query BigQuery as normal."
+
+The analyzer will then take both paths in its planning + execution.
+
 ---
 
 ## Repo layout
@@ -148,8 +183,10 @@ This creates `sample_data/` with the same schema as the BigQuery tables, sized t
 ```
 channel-patterns-analyzer/
 ├── README.md                    ← you are here
-├── BUSINESS_RULES.md            ← Layer 2 — stable domain rules (imported from CLAUDE.md via @)
-├── CLAUDE.md                    ← Layer 1 — analyzer voice (BUILT LIVE in the video; not committed here)
+├── LICENSE                      ← MIT
+├── BUSINESS_RULES.md            ← Layer 2 — stable analysis rules (imported from CLAUDE.md via @)
+├── PROMPTS.md                   ← the 10 prompts that build the analyzer (follow along here)
+├── CLAUDE.md                    ← Layer 1 — analyzer voice (built live in the video; gitignored)
 ├── .env.example                 ← config template
 ├── .gitignore
 ├── requirements.txt
@@ -165,21 +202,20 @@ channel-patterns-analyzer/
 ├── scripts/                     ← utility scripts
 │   └── csv_fallback_loader.py   ← generate sample data for non-BQ users
 │
-└── images/
-    ├── diagram.excalidraw       ← 4-layer Context Engineering (architecture)
-    ├── diagram.png              ← rendered + KC Labs branded
-    ├── diagram-decision-tree.excalidraw  ← which layer is your bottleneck?
-    └── diagram-decision-tree.png
+├── images/
+│   ├── diagram.excalidraw       ← 4-layer Context Engineering (architecture)
+│   ├── diagram.png              ← rendered + KC Labs branded
+│   ├── diagram-decision-tree.excalidraw  ← which layer is your bottleneck?
+│   └── diagram-decision-tree.png
+│
+└── (gitignored — built during the video, not committed)
+    ├── CLAUDE.md                ← analyzer voice file
+    ├── .claude/skills/write-notion-report/SKILL.md   ← the Skill built on camera
+    ├── routine_config.json      ← /schedule routine config
+    └── sample_data/             ← generated CSV fallback data
 ```
 
-What you *won't* find here, because it's built live during the video:
-
-- `CLAUDE.md` — the analyzer's voice file (Section 2)
-- The analyzer code itself (built by GSD in Section 5)
-- `.claude/skills/write-notion-report/SKILL.md` — the Skill built on camera (Section 5)
-- The `/schedule` routine config (Section 6)
-
-After the video, fork this repo and run through the prompts yourself — you'll generate your own versions of all four.
+After the video, fork this repo and run through the prompts yourself — you'll generate your own versions of all four live-built artifacts.
 
 ---
 
@@ -205,6 +241,12 @@ After the video, fork this repo and run through the prompts yourself — you'll 
 - [CLAUDE.md and the `@` import syntax](https://code.claude.com/docs/en/memory)
 - [Claude Code Skills](https://code.claude.com/docs/en/agents-and-tools/agent-skills/)
 - [Claude Code Routines (`/schedule`)](https://code.claude.com/docs/en/routines) — shipped April 14, 2026
+
+---
+
+## License
+
+MIT — see [LICENSE](./LICENSE). Fork it, adapt it, ship your own version.
 
 ---
 

@@ -2,6 +2,18 @@
 -- Per BUSINESS_RULES.md §3: when comparing videos, control for age.
 -- This query computes views per day since publish for each full-length video,
 -- excluding any video published less than 14 days ago (low-confidence per the rule).
+--
+-- Dataset name: bare `youtube_analytics.<table>` form; replace if your dataset
+-- has a different name (see header of sql/01_latest_snapshot_overview.sql).
+--
+-- IMPORTANT: `views_per_day_since_publish_proxy` is a PROXY for the strict
+-- first-30-day normalization required by BUSINESS_RULES.md §3 — it averages
+-- across the entire post-publish window rather than computing views in the
+-- first 30 days specifically. For the strict rule, compute the delta between
+-- the snapshot at publish + 30 days vs. snapshot at publish (requires
+-- per-snapshot row history). Use this proxy when that history is unavailable
+-- or when a relative ranking is good enough; label results as a proxy in
+-- the report.
 
 WITH base AS (
     SELECT
@@ -27,9 +39,9 @@ SELECT
     duration_formatted,
     days_since_published,
     view_count,
-    SAFE_DIVIDE(view_count, days_since_published) AS views_per_day,
+    SAFE_DIVIDE(view_count, days_since_published) AS views_per_day_since_publish_proxy,
     SAFE_DIVIDE(like_count, view_count) * 100 AS like_rate_pct,
     SAFE_DIVIDE(comment_count, view_count) * 100 AS comment_rate_pct
 FROM base
-ORDER BY views_per_day DESC
+ORDER BY views_per_day_since_publish_proxy DESC
 LIMIT 20;
