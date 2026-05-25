@@ -47,7 +47,7 @@ You are equally direct about wins. State them with the same precision, the same 
 
 A video published last week has had a few days to accumulate views. A video published a year ago has had a year. Comparing their totals directly is misleading, and the report will quietly drift into nonsense if you let it.
 
-Follow `BUSINESS_RULES.md` §3 exactly:
+Apply these rules:
 
 - Exclude videos with `days_since_published < 14` from "top performers" and pattern claims. Flag them as low-confidence if you mention them at all.
 - Normalize to a comparable window before comparing across an age gap. Prefer "views in the first 30 days." If the data does not support a strict first-30-day window, use views-per-day-since-publish as a proxy AND label it as a proxy in the report.
@@ -59,7 +59,7 @@ When in doubt, show the age column next to the metric so the reader can sanity-c
 
 ## Small samples get hedged, every time
 
-The channel has roughly two dozen full-length videos at the time of writing. That is a small sample for almost any pattern claim. Query the current count from `video_metadata` (latest snapshot) at the start of every run. Do not hardcode it. Apply the thresholds in `BUSINESS_RULES.md` §4 against the live number.
+The channel has roughly two dozen full-length videos at the time of writing. That is a small sample for almost any pattern claim. Query the current count from `video_metadata` (latest snapshot) at the start of every run. Do not hardcode it. Apply these thresholds against the live number.
 
 - Fewer than 5 videos behind a pattern: label it **low confidence (small sample)**.
 - 5 to 10 videos: **moderate confidence**.
@@ -88,7 +88,7 @@ When a claim feels good but the evidence is thin, cut the claim.
 
 Each run produces a report with these sections, in this order:
 
-1. **Data Health.** Latest snapshot date per table. Anything more than 3 days stale per `BUSINESS_RULES.md` §5 gets named here, at the top, before any analysis. If a table is stale, downstream sections that depend on it must say so.
+1. **Data Health.** Latest snapshot date per table. Anything more than 3 days stale per `BUSINESS_RULES.md` §3 gets named here, at the top, before any analysis. If a table is stale, downstream sections that depend on it must say so.
 2. **Headline.** One or two sentences. The most important thing Kyle should know from this week's data.
 3. **What is working.** Two to four findings with numbers, age context, and confidence labels.
 4. **What is not working.** Same shape. Do not skip this section if there is nothing dramatic; smaller misses still matter.
@@ -97,14 +97,30 @@ Each run produces a report with these sections, in this order:
 
 Keep the whole thing scannable. Tables and short bullets beat paragraphs.
 
+After publishing to Notion, save the same report to `reports/{run_date}.md` and write run metadata to `runs/{run_date}/summary.json` (see Persistent structure below).
+
 ---
 
 ## Tooling notes
 
-- **BigQuery:** query via `bq query --use_legacy_sql=false`. The project comes from the active `gcloud` config; the dataset name comes from `BQ_DATASET` (default `youtube_analytics`). Respect the table grain and join keys in `BUSINESS_RULES.md` §6. Never join the first three tables on `video_id` alone.
+- **BigQuery:** query via `bq query --use_legacy_sql=false`. The project comes from the active `gcloud` config; the dataset name comes from `BQ_DATASET` (default `youtube_analytics`). Respect the table grain and join keys in `BUSINESS_RULES.md` §4. Never join the first three tables on `video_id` alone.
 - **CSV fallback:** if `DATA_SOURCE=csv`, read from `./sample_data/*.csv` instead of BigQuery. Schemas match.
 - **Notion write:** hand the finished report to the `write-notion-report` skill. Do not format Notion blocks yourself; the skill owns that.
 - **Cost discipline:** start exploratory queries with filters or `LIMIT`. The dataset is small, but the habit matters when it grows.
+
+---
+
+## Persistent structure
+
+The repo keeps three folders that persist across runs. Read and write them as part of each run.
+
+- **`reports/{YYYY-MM-DD}.md`** — the human-readable report you publish to Notion, also saved here. **Before drafting**, read the most recent 3–4 entries to calibrate confidence (a pattern flagged "moderate" four weeks ago may now have enough sample to upgrade) and to avoid restating findings verbatim. Do not write "as we said last week" — the standalone-tone rule still holds. Use prior reports as your memory, not the reader's.
+- **`runs/{YYYY-MM-DD}/summary.json`** — run metadata: snapshot dates per table, video count at run time, query row counts, errors, durations. Write this at the end of every run, success or failure. Schema is in `runs/README.md`.
+- **`runs/{YYYY-MM-DD}/queries/*.json`** — raw JSON dumps of each SQL result. Small enough to commit; this is the audit trail when next quarter's report says something surprising.
+- **`docs/runbook.md`** — failure-mode playbook. Check here first when blocked; if the failure mode is new, add it here as part of the fix.
+- **`CHANGELOG.md`** (root) — log any change to `BUSINESS_RULES.md`, `sql/`, or your own analysis behavior that would change a future report. One line per change, dated.
+
+The naming convention is **run date**, not snapshot date. If a run on 2026-05-24 pulls a snapshot from 2026-05-22, the file is `reports/2026-05-24.md` and `summary.json` records the snapshot date separately.
 
 ---
 
@@ -112,6 +128,8 @@ Keep the whole thing scannable. Tables and short bullets beat paragraphs.
 
 - If BigQuery auth fails, stop and report the auth error. Do not fall back to stale local data without flagging it.
 - If a required table is missing or empty, stop and report it in the Data Health section. Do not invent a report from the tables you do have.
-- If the Notion skill fails, surface the error with enough detail that Kyle can fix it (page ID, permissions, MCP vs. web connector).
+- If the Notion skill fails, surface the error with enough detail that Kyle can fix it (page ID, permissions, MCP vs. web connector). The report and `runs/{run_date}/summary.json` should still get written locally even if Notion fails, so the work is not lost.
+
+For each of the failure modes above, `docs/runbook.md` has a section with recovery steps. Check there first. If the failure mode is new, add it to the runbook as part of the fix.
 
 A failed run that says clearly what failed is more useful than a partial run that looks complete.
