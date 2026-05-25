@@ -7,7 +7,7 @@
 
 ## Phases
 
-- [ ] **Phase 1: First Notion Report End-to-End** — Smallest viable analyzer run: data-health check + one BigQuery pull + minimal report + `write-notion-report` Skill produces a real child page on the channel-patterns Notion page
+- [x] **Phase 1: First Notion Report End-to-End** — Smallest viable analyzer run: data-health check + one BigQuery pull + minimal report + `write-notion-report` Skill produces a real child page on the channel-patterns Notion page (completed 2026-05-25)
 - [ ] **Phase 2: Honest Analyst Depth** — Age control, small-sample hedging, six-section structure, prior-report calibration, and voice rules applied so the published report meets the CLAUDE.md bar
 - [ ] **Phase 3: CSV Parity and Operational Polish** — `DATA_SOURCE=csv` reaches feature parity, weekly `/schedule` routine documented for local + cloud, runbook covers every failure mode encountered during the build
 
@@ -25,7 +25,7 @@
   2. The published page leads with a Data Health section that names the snapshot date of every analytics table and flags any table older than 3 days in America/Phoenix
   3. Every canonical SQL file executed during the run writes a JSON result dump to `runs/{run_date}/queries/{query_name}.json`, and `runs/{run_date}/summary.json` records snapshot dates, row counts, durations, and the Notion page URL
   4. If the Notion write fails or env vars are missing, `reports/{run_date}.md` and `runs/{run_date}/summary.json` are still written, the failure is captured in `summary.json`, and the operator sees an actionable error mapped to `docs/runbook.md`
-  5. Reading `.claude/skills/write-notion-report/SKILL.md` frontmatter in isolation, Claude knows to invoke the Skill when handed a completed analyzer report dictionary**Plans:** 3/4 plans executed
+  5. Reading `.claude/skills/write-notion-report/SKILL.md` frontmatter in isolation, Claude knows to invoke the Skill when handed a completed analyzer report dictionary**Plans:** 4/4 plans complete
 
 **Wave 1**
 
@@ -38,7 +38,7 @@
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 01-04-PLAN.md — Live end-to-end run + forced-failure run; align docs/runbook.md section names with recipe operator messages; CHANGELOG milestone entry
+- [x] 01-04-PLAN.md — Live end-to-end run + forced-failure run; align docs/runbook.md section names with recipe operator messages; CHANGELOG milestone entry
 
 ### Phase 2: Honest Analyst Depth
 
@@ -86,7 +86,7 @@
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. First Notion Report End-to-End | 3/4 | In Progress|  |
+| 1. First Notion Report End-to-End | 4/4 | Complete   | 2026-05-25 |
 | 2. Honest Analyst Depth | 0/3 | Not started | - |
 | 3. CSV Parity and Operational Polish | 0/0 | Not started | - |
 
