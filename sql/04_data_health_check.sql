@@ -14,7 +14,7 @@
 SELECT
     'video_metadata' AS table_name,
     MAX(snapshot_date) AS latest_snapshot,
-    DATE_DIFF(CURRENT_DATE(), MAX(snapshot_date), DAY) AS days_stale
+    DATE_DIFF(CURRENT_DATE('America/Phoenix'), MAX(snapshot_date), DAY) AS days_stale
 FROM `youtube_analytics.video_metadata`
 
 UNION ALL
@@ -22,7 +22,7 @@ UNION ALL
 SELECT
     'daily_video_stats' AS table_name,
     MAX(snapshot_date) AS latest_snapshot,
-    DATE_DIFF(CURRENT_DATE(), MAX(snapshot_date), DAY) AS days_stale
+    DATE_DIFF(CURRENT_DATE('America/Phoenix'), MAX(snapshot_date), DAY) AS days_stale
 FROM `youtube_analytics.daily_video_stats`
 
 UNION ALL
@@ -30,7 +30,7 @@ UNION ALL
 SELECT
     'daily_video_analytics' AS table_name,
     MAX(snapshot_date) AS latest_snapshot,
-    DATE_DIFF(CURRENT_DATE(), MAX(snapshot_date), DAY) AS days_stale
+    DATE_DIFF(CURRENT_DATE('America/Phoenix'), MAX(snapshot_date), DAY) AS days_stale
 FROM `youtube_analytics.daily_video_analytics`
 
 UNION ALL
@@ -38,7 +38,7 @@ UNION ALL
 SELECT
     'daily_traffic_sources' AS table_name,
     MAX(snapshot_date) AS latest_snapshot,
-    DATE_DIFF(CURRENT_DATE(), MAX(snapshot_date), DAY) AS days_stale
+    DATE_DIFF(CURRENT_DATE('America/Phoenix'), MAX(snapshot_date), DAY) AS days_stale
 FROM `youtube_analytics.daily_traffic_sources`
 
 ORDER BY days_stale DESC;
