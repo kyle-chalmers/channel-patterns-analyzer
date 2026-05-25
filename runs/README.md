@@ -35,6 +35,7 @@ The dataset is small enough (~23 videos across 4 tables) that committing raw que
   "run_started_at": "2026-05-24T20:00:00-07:00",
   "run_finished_at": "2026-05-24T20:04:32-07:00",
   "data_source": "bigquery",
+  "transport": "bq_cli",
   "bq_project": "<project-id>",
   "bq_dataset": "youtube_analytics",
   "snapshot_dates": {
@@ -52,11 +53,14 @@ The dataset is small enough (~23 videos across 4 tables) that committing raw que
   "report_path": "reports/2026-05-24.md",
   "notion_write_ok": true,
   "notion_page_id": "<page-id>",
+  "notion_url": "https://www.notion.so/Weekly-report-2026-05-24-<shortid>",
   "errors": []
 }
 ```
 
 Always write `summary.json`, even on failure. A failed run with `errors: [...]` is more useful than a missing folder.
+
+`transport` is `"bq_cli"` when the run used the local `bq` CLI and `"bq_mcp"` when it used the BigQuery MCP tool surface; the recipe probes available tools at runtime (per CONTEXT.md D-03) and records which one fired. `notion_url` is populated when `notion_write_ok` is true, so post-mortems can jump straight to the published page without rebuilding the URL from `notion_page_id`.
 
 ## Related
 
