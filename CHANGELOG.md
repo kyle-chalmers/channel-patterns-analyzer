@@ -6,6 +6,14 @@ One entry per change, dated. Brief is fine; the goal is auditability, not narrat
 
 ---
 
+## {run_date — populated by orchestrator after live run} — Phase 1 first end-to-end run
+
+- Ran /run-analyzer end-to-end against live BigQuery + live Notion. New child page created on the channel-patterns parent. Local artifacts at reports/{run_date}.md and runs/{run_date}/.
+- docs/runbook.md gained one new section: "Required environment variable is missing". Other runbook headings already matched the recipe's operator-message strings.
+- Any new failure modes encountered during the live run are added below; if no new modes surfaced, this entry says so explicitly.
+
+---
+
 ## 2026-05-25 — Phase 1 scaffold fixups
 
 - Timezone: replaced bare `CURRENT_DATE()` with `CURRENT_DATE('America/Phoenix')` in sql/02, sql/03, sql/04. Aligns staleness and `days_since_published` with the rule in BUSINESS_RULES.md §3.
