@@ -6,11 +6,14 @@ One entry per change, dated. Brief is fine; the goal is auditability, not narrat
 
 ---
 
-## {run_date — populated by orchestrator after live run} — Phase 1 first end-to-end run
+## 2026-05-25 — Phase 1 first end-to-end run
 
-- Ran /run-analyzer end-to-end against live BigQuery + live Notion. New child page created on the channel-patterns parent. Local artifacts at reports/{run_date}.md and runs/{run_date}/.
+- Ran /run-analyzer end-to-end against live BigQuery + live Notion. New child page created on the channel-patterns parent (https://www.notion.so/36bccd0549458105b8c4c3cc584e4d47). Local artifacts at reports/2026-05-25.md and runs/2026-05-25/.
 - docs/runbook.md gained one new section: "Required environment variable is missing". Other runbook headings already matched the recipe's operator-message strings.
-- Any new failure modes encountered during the live run are added below; if no new modes surfaced, this entry says so explicitly.
+- Two recipe defects surfaced during the live run (logged in runs/2026-05-25/summary.json.warnings and in 01-04-SUMMARY.md for Phase 2 follow-up):
+  - `bq query --max_rows=10000` is not a valid flag for the bq query subcommand (only `bq head` accepts it). Crashes with Python RecursionError in bq's flag-suggester.
+  - Passing SQL as a positional argument fails when the SQL contains unicode box-drawing characters (`─` U+2500) used in this project's sql/ headers. Same RecursionError. Workaround: pipe SQL via stdin (`printf '%s' "$SQL" | bq --format=json query ...`).
+- Phase 2c stale-data integration test did not apply this run: all four analytics tables snapshot 2026-05-25 (days_stale=0). The 89-day gap noted on 2026-05-24 for daily_video_analytics and daily_traffic_sources has resolved. Flagged for Phase 2 follow-up to design a synthetic stale-table simulation.
 
 ---
 

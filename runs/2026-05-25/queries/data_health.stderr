@@ -1,0 +1,38 @@
+Traceback (most recent call last):
+  File "/opt/homebrew/share/google-cloud-sdk/platform/bq/bq.py", line 162, in <module>
+    appcommands.Run()
+    ~~~~~~~~~~~~~~~^^
+  File "/opt/homebrew/share/google-cloud-sdk/platform/bq/third_party/pyglib/appcommands.py", line 837, in Run
+    return app.run(_CommandsStart, flags_parser=ParseFlagsWithUsage)
+           ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/share/google-cloud-sdk/platform/bq/third_party/absl/app.py", line 312, in run
+    _run_main(main, args)
+    ~~~~~~~~~^^^^^^^^^^^^
+  File "/opt/homebrew/share/google-cloud-sdk/platform/bq/third_party/absl/app.py", line 258, in _run_main
+    sys.exit(main(argv))
+             ~~~~^^^^^^
+  File "/opt/homebrew/share/google-cloud-sdk/platform/bq/third_party/pyglib/appcommands.py", line 821, in _CommandsStart
+    raise sys.exit(command.CommandRun(GetCommandArgv()))
+                   ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/share/google-cloud-sdk/platform/bq/third_party/pyglib/appcommands.py", line 328, in CommandRun
+    argv = ParseFlagsWithUsage(argv)
+  File "/opt/homebrew/share/google-cloud-sdk/platform/bq/third_party/pyglib/appcommands.py", line 749, in ParseFlagsWithUsage
+    _cmd_argv = FLAGS(argv)
+  File "/opt/homebrew/share/google-cloud-sdk/platform/bq/third_party/absl/flags/_flagvalues.py", line 668, in __call__
+    suggestions = _helpers.get_flag_suggestions(name, list(self))
+  File "/opt/homebrew/share/google-cloud-sdk/platform/bq/third_party/absl/flags/_helpers.py", line 217, in get_flag_suggestions
+    distances = [(_damerau_levenshtein(attempt, option[0:len(attempt)]), option)
+                  ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/share/google-cloud-sdk/platform/bq/third_party/absl/flags/_helpers.py", line 261, in _damerau_levenshtein
+    return distance(a, b)
+  File "/opt/homebrew/share/google-cloud-sdk/platform/bq/third_party/absl/flags/_helpers.py", line 250, in distance
+    distance(x[1:], y) + 1,  # correct an insertion error
+    ~~~~~~~~^^^^^^^^^^
+  File "/opt/homebrew/share/google-cloud-sdk/platform/bq/third_party/absl/flags/_helpers.py", line 250, in distance
+    distance(x[1:], y) + 1,  # correct an insertion error
+    ~~~~~~~~^^^^^^^^^^
+  File "/opt/homebrew/share/google-cloud-sdk/platform/bq/third_party/absl/flags/_helpers.py", line 250, in distance
+    distance(x[1:], y) + 1,  # correct an insertion error
+    ~~~~~~~~^^^^^^^^^^
+  [Previous line repeated 987 more times]
+RecursionError: maximum recursion depth exceeded

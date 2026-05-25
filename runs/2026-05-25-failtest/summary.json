@@ -1,0 +1,18 @@
+{
+  "run_date": "2026-05-25-failtest",
+  "run_started_at": "2026-05-25T11:35:00-07:00",
+  "run_finished_at": "2026-05-25T11:35:00-07:00",
+  "data_source": "bigquery",
+  "transport": null,
+  "bq_project": "primeval-node-478707-e9",
+  "bq_dataset": "youtube_analytics",
+  "snapshot_dates": {},
+  "stale_tables": [],
+  "video_count_full_length": 0,
+  "queries_run": [],
+  "report_path": null,
+  "notion_write_ok": false,
+  "errors": [
+    {"category": "env_missing", "message": "NOTION_REPORT_PAGE_ID not set", "step": "preflight"}
+  ]
+}
