@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-last_updated: "2026-05-26T03:40:27.319Z"
+status: awaiting_cloud_smoke_test
+last_updated: "2026-05-26T04:30:15.000Z"
 progress:
   total_phases: 3
   completed_phases: 2
