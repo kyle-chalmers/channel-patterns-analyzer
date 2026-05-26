@@ -117,14 +117,18 @@ WITH latest_common AS (
 SELECT
     COUNT(*) AS eligible_count,
     (SELECT COUNT(*) FROM `${BQ_DATASET}.video_metadata` m2
-        WHERE m2.snapshot_date = (SELECT snapshot_date FROM latest_common)
+        WHERE (SELECT snapshot_date FROM latest_common) IS NOT NULL
+          AND m2.snapshot_date = (SELECT snapshot_date FROM latest_common)
           AND m2.video_type = 'full_length') AS total_full_length,
     (SELECT snapshot_date FROM latest_common) AS latest_common_snapshot
 FROM `${BQ_DATASET}.video_metadata` m
-WHERE m.snapshot_date = (SELECT snapshot_date FROM latest_common)
+WHERE (SELECT snapshot_date FROM latest_common) IS NOT NULL
+    AND m.snapshot_date = (SELECT snapshot_date FROM latest_common)
     AND m.video_type = 'full_length'
     AND DATE_DIFF(CURRENT_DATE("America/Phoenix"), DATE(m.published_at), DAY) >= 14;
 ```
+
+**NULL-guard note:** the `(SELECT snapshot_date FROM latest_common) IS NOT NULL` clauses above are deliberate. If either `video_metadata` or `daily_video_stats` is empty, `LEAST(NULL, X)` returns NULL, which would silently produce `eligible_count = 0` and a 0 denominator for confidence labels (CR-02). The Step 2 data-health check is the primary STOP for empty source tables; these guards are defense-in-depth at the SQL layer.
 
 Substitute `${BQ_DATASET}` with `$BQ_DATASET` (in-memory; do not write the rewritten SQL to disk). Dispatch via `$TRANSPORT` using the Step 1 invocation shape (`printf '%s' "$SQL" | bq --format=json query ...` for `bq_cli`; `execute_sql_readonly` for `bq_mcp`).
 
