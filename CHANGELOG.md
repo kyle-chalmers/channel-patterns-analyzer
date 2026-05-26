@@ -6,6 +6,17 @@ One entry per change, dated. Brief is fine; the goal is auditability, not narrat
 
 ---
 
+## 2026-05-25, Phase 3 Plan 03-03
+
+Phase 3 Plan 03-03 ships the recipe-side CSV branch, the cloud-routine setup walkthrough, the Run-now checklist (D-03), and the `.env.example` cleanup. With this plan, CSV-mode is end-to-end runnable (Slice 1 complete) and an operator can launch the weekly cloud routine from claude.com following `docs/schedule.md` top-to-bottom (Slice 2 complete).
+
+- `.claude/commands/run-analyzer.md` (Plan 03-03): adds the third transport branch (`DATA_SOURCE=csv` short-circuits before the `bq` probe and regenerates `sample_data/*.csv` via `scripts/csv_fallback_loader.py` before Step 2; Steps 2, 3, 5 dispatch to `python scripts/csv_query.py <name>` when `$TRANSPORT=csv`; Step 6 prepends `data source: csv (sample fixtures, not live)` to the report when CSV-mode). Also dereferences six `.planning/` prose references that a cloud routine pasting the recipe verbatim could not resolve. Before: recipe was BigQuery-only and had six `.planning/` cross-doc references. After: three-branch transport probe, zero `.planning/` references, recipe is fully self-contained for cloud paste. Impact on recent reports: zero (CSV mode is opt-in via `.env`; BigQuery-mode runs are byte-identical to Phase 2's behavior).
+- `docs/schedule.md` (Plan 03-03): adds a numbered cloud-routine setup walkthrough (9 steps, with concrete claude.com field names verified against `https://code.claude.com/docs/en/routines` on 2026-05-26) and a four-item Run-now checklist (D-03 smoke test). Fixes the portability bug in the Local-vs-cloud table cell: "Service account key in routine env vars" became "BigQuery web connector (authorized once in your Anthropic account)" per D-01 (the cloud routine uses the BigQuery web connector, no service-account keys anywhere). Also removes em dashes and an en dash from the file to conform to `CLAUDE.md § "Voice"`. Before: shallow "cloud column" with conflicting auth guidance, em dashes throughout. After: an operator can launch the routine on the first try without coaching. Impact on recent reports: zero. Forward-looking: enables the Monday 9am Phoenix cloud routine to actually launch.
+- `.env.example` (Plan 03-03): removes four unused env vars (`YOUTUBE_CHANNEL_ID`, `ANALYSIS_LOOKBACK_DAYS`, `MIN_VIDEO_AGE_DAYS`, `SCHEDULE_TIMEZONE`) and drops the now-empty "YouTube channel identity" and "Analysis configuration" section headings. Before: 39 lines, eight env vars, four of which no code in the repo reads. After: 22 lines, four env vars (`DATA_SOURCE`, `BQ_PROJECT`, `BQ_DATASET`, `NOTION_REPORT_PAGE_ID`), matching exactly what `.claude/commands/run-analyzer.md` reads. Em dashes in header comments replaced with commas/colons. Impact on recent reports: zero.
+- Indirect change: the recipe now invokes `scripts/csv_query.py` (created in Plan 03-02) and `scripts/csv_fallback_loader.py` (modified in Plan 03-01). The full CSV-mode chain works end-to-end after this plan ships. Operators with `DATA_SOURCE=csv` set produce a report under `reports/{date}.md` with all six sections and the top-of-report `data source: csv (sample fixtures, not live)` annotation, with the same persistence artifacts as a BigQuery-mode run.
+
+---
+
 ## 2026-05-25
 
 Phase 2 Plan 02-01 SQL correctness fixes (D-05). All three files pass `bq` dry-run validation against the live `youtube_analytics` dataset.
