@@ -404,3 +404,5 @@ Print exactly one of three patterns, then exit:
 - BQ-FAIL: `Run {run_date} FAILED at {step}: {error}. Recovery: see docs/runbook.md § '{relevant section}'.`
 
 The three patterns are exhaustive: every run finishes with one of them. For BQ-FAIL, the relevant docs/runbook.md section is one of "BigQuery auth failure" or "Required table is missing or empty", chosen by the error category recorded in Step 2 or Step 3 (`bq_auth` → "BigQuery auth failure"; `missing_table` or `empty_result` → "Required table is missing or empty"). Stale tables do NOT fail the run: staleness is surfaced inline in the report's Data Health section and disclaimed per-section via the D-12 rule (Step 6 § 4), so it never routes through the BQ-FAIL operator message. The runbook's "A required table is stale" section exists for the operator who notices a staleness flag in the published report, not for a recipe-aborted run.
+
+For both NOTION-FAIL and BQ-FAIL, the operator's next move is to read the named runbook section. If this failure mode is not in `docs/runbook.md`, add it as part of the fix (per `docs/maintenance.md`; ERR-03). The runbook only helps if it stays current.
