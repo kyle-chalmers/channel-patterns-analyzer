@@ -46,6 +46,14 @@ Parse the 4-row result. Each row has `table_name`, `latest_snapshot`, `days_stal
 
 **`SIMULATE_STALE` override (testing only):** If the env var `SIMULATE_STALE` is set, parse it as a comma-separated list of `table_name:days` pairs and override the parsed `days_stale` for the named tables before computing `stale_tables`. Example: `SIMULATE_STALE="daily_video_analytics:89,daily_traffic_sources:89"` simulates the 89-day-stale state the channel had on 2026-05-24. The override mutates the in-memory `data_health` rows only; it does NOT modify the BigQuery result on disk (`runs/{run_date}/queries/data_health.json` still contains the real values). Record a `warnings: ["simulate_stale_applied: <value of SIMULATE_STALE>"]` entry in `summary.json` when the override fires, so the audit trail shows the data was synthetic. This exists because Phase 1's 89-day stale state on `daily_video_analytics` and `daily_traffic_sources` resolved on 2026-05-25, leaving no live way to exercise the stale-table disclaimer machinery (D-12) end-to-end. The override is a recipe-level seam; it does not require a CLI flag, an SQL edit, or a BigQuery change.
 
+**SIMULATE_STALE validation (required before applying any override):**
+
+1. Each comma-separated pair MUST match the regex `^(video_metadata|daily_video_stats|daily_video_analytics|daily_traffic_sources):\d+$`. Table-name typos (`daily_video_analytic:89`), garbage values (`../../etc/passwd:foo`), and non-integer days (`video_metadata:soon`) all fail this check.
+2. If ANY pair fails validation, do NOT partial-apply. Record `warnings: ["simulate_stale_invalid: <raw value of SIMULATE_STALE>"]` in `summary.json` and skip the override entirely. All four `data_health` rows keep their real `days_stale` values.
+3. If every pair passes validation but a `table_name` is not present in the parsed `data_health` rows (e.g., `sql/04` returned three rows instead of four), record `warnings: ["simulate_stale_table_not_in_health_rows: <table_name>"]` and continue applying the overrides that do match. A SQL/parser mismatch is worth surfacing without aborting the whole override.
+
+The silent-failure mode the validation prevents: an operator typos a table name to test the D-12 disclaimer rule, sees no stale flag in the report, and concludes the test passed when in fact the override never fired.
+
 Failure routing:
 
 - If `bq_cli` stderr contains `Reauthentication failed`, `cannot prompt during non-interactive`, or `Could not load the default credentials` (or for `bq_mcp`, the response has an auth-style error), record `errors: [{"category": "bq_auth", "message": "<first line>", "step": "data_health"}]`. Operator message names docs/runbook.md section "BigQuery auth failure". STOP after writing summary.json in Step 10.
