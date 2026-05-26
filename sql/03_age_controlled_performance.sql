@@ -42,7 +42,7 @@ base AS (
         m.title,
         m.duration_formatted,
         m.published_at,
-        DATE_DIFF(CURRENT_DATE("America/Phoenix"), DATE(m.published_at), DAY) AS days_since_published,
+        DATE_DIFF(CURRENT_DATE("America/Phoenix"), DATE(m.published_at, "America/Phoenix"), DAY) AS days_since_published,
         s.view_count,
         s.like_count,
         s.comment_count
@@ -52,7 +52,7 @@ base AS (
     WHERE (SELECT snapshot_date FROM latest_common) IS NOT NULL
         AND m.snapshot_date = (SELECT snapshot_date FROM latest_common)
         AND m.video_type = 'full_length'
-        AND DATE_DIFF(CURRENT_DATE("America/Phoenix"), DATE(m.published_at), DAY) >= 14
+        AND DATE_DIFF(CURRENT_DATE("America/Phoenix"), DATE(m.published_at, "America/Phoenix"), DAY) >= 14
 )
 SELECT
     title,

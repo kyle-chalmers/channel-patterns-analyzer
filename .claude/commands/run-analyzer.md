@@ -140,8 +140,10 @@ FROM `${BQ_DATASET}.video_metadata` m
 WHERE (SELECT snapshot_date FROM latest_common) IS NOT NULL
     AND m.snapshot_date = (SELECT snapshot_date FROM latest_common)
     AND m.video_type = 'full_length'
-    AND DATE_DIFF(CURRENT_DATE("America/Phoenix"), DATE(m.published_at), DAY) >= 14;
+    AND DATE_DIFF(CURRENT_DATE("America/Phoenix"), DATE(m.published_at, "America/Phoenix"), DAY) >= 14;
 ```
+
+**Phoenix-tz note on `DATE(m.published_at, "America/Phoenix")`:** the two-argument form of `DATE(TIMESTAMP, timezone)` converts the timestamp to the named timezone BEFORE truncating to a date. `published_at` is a UTC `TIMESTAMP` from the YouTube API; casting it with the single-argument `DATE()` would truncate at the UTC day boundary, which is up to 7 hours off from the Phoenix-local day this analyzer reasons about. The off-by-one would surface at the 14-day exclusion boundary (a video published 2026-05-25 04:30 UTC reads as `2026-05-24` in Phoenix; the difference flips a borderline video between included and excluded in `eligible_count`). The same two-arg form is used in `sql/02` and `sql/03` so all three age computations share one timezone semantics.
 
 **NULL-guard note:** the `(SELECT snapshot_date FROM latest_common) IS NOT NULL` clauses above are deliberate. If either `video_metadata` or `daily_video_stats` is empty, `LEAST(NULL, X)` returns NULL, which would silently produce `eligible_count = 0` and a 0 denominator for confidence labels (CR-02). The Step 2 data-health check is the primary STOP for empty source tables; these guards are defense-in-depth at the SQL layer.
 
