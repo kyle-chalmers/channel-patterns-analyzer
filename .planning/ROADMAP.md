@@ -80,7 +80,20 @@
   3. `docs/schedule.md` walks an operator through setting up the weekly Monday 9am Phoenix `/schedule` routine in both local (Claude Code terminal) and cloud (claude.ai routine) variants, and the `write-notion-report` Skill works identically in both contexts without code changes
   4. `docs/runbook.md` contains a named recovery section for each failure mode (bq auth, missing table, empty table, Notion write fail, missing env var), and any new failure mode encountered during the build is added there plus logged in `CHANGELOG.md` as part of the fix
 
-**Plans:** TBD
+**Plans:** 4 plans
+
+**Wave 1** *(parallel)*
+
+- [ ] 03-01-PLAN.md — Fix `scripts/csv_fallback_loader.py` UTC bugs (`:55`, `:145`), add `--snapshot-date` arg; clean up `requirements.txt` cross-ref rot; CHANGELOG entry. (CSV-01)
+- [ ] 03-02-PLAN.md — Create `scripts/csv_query.py` stdlib helper emitting `bq --format=json`-shaped JSON for the three queries the recipe runs (data_health, top_full_length_videos, eligible_video_count). (CSV-01, CSV-02)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 03-03-PLAN.md — Add `DATA_SOURCE=csv` branch to `.claude/commands/run-analyzer.md` (three-branch transport probe + CSV dispatch in Steps 2/3/5 + top-of-report annotation); dereference six `.planning/` prose references the cloud routine can't resolve; rewrite cloud-routine section of `docs/schedule.md` with numbered field-by-field walkthrough (D-04) + four-item Run-now checklist (D-03); fix portability bug in schedule.md:20 (D-01); clean up `.env.example` to four real env vars. (CSV-01, CSV-02, SCHED-01, SCHED-02)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 03-04-PLAN.md — Expand `docs/runbook.md` from 6 to 13+ named sections (every recipe error category + cloud-specific failure modes RESEARCH.md inventoried); fix portability bug in runbook.md:23 (service-account-key reference, conflicts with D-01); fix `BUSINESS_RULES.md §N` cross-ref rot in `docs/maintenance.md`; add ERR-03 closing instruction to recipe Step 11. (ERR-01, ERR-03)
 
 ## Progress
 
@@ -88,7 +101,7 @@
 |-------|----------------|--------|-----------|
 | 1. First Notion Report End-to-End | 4/4 | Complete   | 2026-05-25 |
 | 2. Honest Analyst Depth | 3/3 | Complete    | 2026-05-26 |
-| 3. CSV Parity and Operational Polish | 0/0 | Not started | - |
+| 3. CSV Parity and Operational Polish | 0/4 | Ready to execute | - |
 
 ## Coverage Summary
 
@@ -109,3 +122,4 @@ All 31 v1 requirements mapped to exactly one phase. See REQUIREMENTS.md traceabi
 ---
 *Roadmap created: 2026-05-24*
 *Phase 1 plans created: 2026-05-25*
+*Phase 3 plans created: 2026-05-26*
