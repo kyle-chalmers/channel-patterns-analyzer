@@ -66,11 +66,27 @@ If the query returns zero rows, this is a BQ-03 failure: record `errors: [{"cate
 
 This step implements ANALYSIS-05 and D-08 from `.planning/phases/02-honest-analyst-depth/02-CONTEXT.md`. Run AFTER Step 3 (top-videos pull) and BEFORE the draft step.
 
-1. List existing reports excluding today's date (today's same-day retry, if any, belongs to "this run", not the calibration archive):
+1. Select the **3 most recent distinct prior dates** from `reports/`, excluding today's date (today's same-day retry, if any, belongs to "this run", not the calibration archive). Lexicographic `sort | tail -n 3` over filenames is wrong here: same-day retries (`YYYY-MM-DD-N.md`) sort after the original and would let a single prior date monopolize all three slots. Pick distinct dates first, then resolve each date to its canonical file:
    ```bash
-   ls reports/ | grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}(-[0-9]+)?\.md$' | grep -v "^${run_date}" | sort | tail -n 3
+   # 1a. Extract distinct prior dates (newest 3, excluding today):
+   prior_dates=$(ls reports/ \
+     | grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}(-[0-9]+)?\.md$' \
+     | sed -E 's/^([0-9]{4}-[0-9]{2}-[0-9]{2}).*/\1/' \
+     | sort -u \
+     | grep -v "^${run_date}$" \
+     | tail -n 3)
+
+   # 1b. For each selected date, the canonical report is either
+   #     `{date}.md` (steady state) or the highest-suffix `{date}-N.md`
+   #     (latest same-day retry wins as the canonical record for that date).
+   for d in $prior_dates; do
+     latest=$(ls reports/ | grep -E "^${d}(-[0-9]+)?\.md$" | sort -V | tail -n 1)
+     # read reports/$latest
+   done
    ```
-   The naming convention is `YYYY-MM-DD.md` (steady state) or `YYYY-MM-DD-N.md` (same-day retry); ISO-8601 lexicographic sort yields chronological order, and same-day retries sort after the original.
+   The naming convention is `YYYY-MM-DD.md` (steady state) or `YYYY-MM-DD-N.md` (same-day retry). The two-step selection (distinct dates first, then highest-suffix within each date) guarantees three different prior dates are read whenever three or more exist in the archive, which is what the calibration logic requires.
+
+   **Assertion:** The list of dates assembled in step 6 below (`prior_reports_consulted`) MUST contain only distinct `YYYY-MM-DD` values. If two same-date entries ever appear, the selection above failed and the run should record `warnings: ["prior_report_selection_duplicate_date: <date>"]` in `summary.json`.
 2. Read those files in full (zero, one, two, or three of them, whatever exists). Hold the content in working memory for the draft step.
 3. For each file read, also read its sibling `runs/{date}/summary.json` and capture the `snapshot_dates` map. This is the per-run snapshot calibration logic: confidence calibration uses the *observed* snapshot_dates from each prior run, not assumptions about state continuity. Critical context: the 89-day stale state on `daily_video_analytics` and `daily_traffic_sources` resolved between 2026-05-24 and 2026-05-25, so reading the prior `summary.json` is the only way to know which sections of each prior report were drawing from fresh vs. stale data at the time.
 4. Use prior reports to:
