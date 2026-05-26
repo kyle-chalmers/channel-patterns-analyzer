@@ -351,7 +351,7 @@ Invoke the `write-notion-report` Skill with the assembled dict. The Skill return
 
 Capture the return value. CRITICAL: do NOT fail the run if the Skill returns `ok: false`. Local artifacts already exist from the data-health, top-videos, eligible-count, prior-report, and draft steps; the write-summary step captures the Skill's failure in summary.json. The report has landed in `reports/{run_date}.md` regardless.
 
-If the Skill is not loaded in the session (the `.claude/skills/write-notion-report/SKILL.md` file is missing or the runtime did not pick it up), treat as `{"ok": false, "category": "skill_unavailable"}`, queue the operator message naming docs/runbook.md section "Notion write failed", and proceed to the write-summary step.
+If the Skill is not loaded in the session (the `.claude/skills/write-notion-report/SKILL.md` file is missing or the runtime did not pick it up), treat as `{"ok": false, "error": "write-notion-report skill not loaded in session", "category": "transport_error"}`. The `transport_error` category aligns with the Skill's own mapping table for "MCP tool not loaded in this session" (see `.claude/skills/write-notion-report/SKILL.md` § "Return shape and error handling"); using one of the Skill's six canonical categories keeps `summary.json.errors[].category` 1:1 with a runbook section. Queue the operator message naming docs/runbook.md section "Notion write failed" and proceed to the write-summary step.
 
 ## Step 10: Write summary.json (PERSIST-02, ERR-02)
 
