@@ -312,7 +312,11 @@ These are the snake-case names to use in `voice_audit.checks_passed`:
 
 ### Publish gate (RESEARCH.md Pitfall 3 mitigation)
 
-When all checks pass, proceed to Step 8 (Assemble the report dict) and from there to Step 9 (Invoke `write-notion-report`). Do NOT advance to the assemble-dict step while any item remains unticked. The Skill MUST NOT be invoked while any item remains unticked.
+When all checks pass, proceed to Step 8 (Assemble the report dict) and from there to Step 9 (Invoke `write-notion-report`). Do NOT advance to the assemble-dict step while any item remains unticked. The Skill SHOULD NOT be invoked while any item remains unticked.
+
+**Enforcement is honor-system, not code.** The gate is markdown instructions to the analyzer agent, not a runtime check. Two consequences:
+- "SHOULD NOT" (not "MUST NOT") accurately describes the strength of enforcement here. A future Python-side validator could promote this to a hard MUST (TODO: surface `voice_audit` presence as a precondition in a wrapper script around Step 9), but until that lands the strongest available enforcement is the agent's compliance with this recipe.
+- **Step 9 precondition (markdown gate, layer 2):** before invoking `write-notion-report` in Step 9, re-verify that `voice_audit.checks_passed` is non-empty in working memory. If it is empty or missing, return to Step 7 and run the audit. This second instruction means the agent must violate TWO explicit recipe steps to skip the audit, not one.
 
 If a check cannot be ticked because the data needed to verify it is unavailable or because the case genuinely falls outside the checklist's scope, record the reason in `summary.json.voice_audit.fixes_applied` with `section: "(audit)"` and `fix: "could not verify <check_identifier>: <reason>"`, and proceed only if the reason is genuinely outside the checklist's scope. Do not use this escape hatch to skip checks that could be verified with a little more work.
 
@@ -334,6 +338,8 @@ Build a strict 8-key dict matching the `write-notion-report` Skill's input contr
 Validate before Step 9: if any key is missing, do NOT invoke the Skill. Record `errors: [{"category": "report_dict_invalid", "message": "missing key: <name>", "step": "assemble_dict"}]` and proceed to Step 10 to write summary.json.
 
 ## Step 9: Invoke write-notion-report (NOTION-01..06)
+
+**Precondition (markdown gate per Step 7):** before invoking the Skill, confirm `voice_audit.checks_passed` in working memory is non-empty. If it is empty or missing, Step 7 did not run; return to Step 7 and complete the audit before continuing. Do not invoke the Skill on an unaudited draft.
 
 Invoke the `write-notion-report` Skill with the assembled dict. The Skill returns one of:
 
