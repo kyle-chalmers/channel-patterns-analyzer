@@ -39,11 +39,20 @@ output/
 # Note: pattern is `.claude/skills/*` (not `.claude/skills/`) so git still
 # descends into the directory; a trailing-slash directory ignore short-circuits
 # git's traversal and the negations below would never apply (verified empirically
-# 2026-05-25 against git 2.x — see Rule-1 deviation in 01-01-SUMMARY.md).
+# 2026-05-25 against git 2.x, see Rule-1 deviation in 01-01-SUMMARY.md).
 .claude/skills/*
 # Phase 1: ship the write-notion-report Skill so the repo has a working Notion
 # writer out of the box. Other Skills under .claude/skills/ remain live-built
 # during the video and stay ignored.
+#
+# DO NOT DELETE the `**` negation on the line below. Re-including a directory
+# with `!<dir>/` does not automatically re-include the files inside it under
+# all git versions, especially when the parent pattern `.claude/skills/*`
+# already matched the children. Verified empirically 2026-05-25 against
+# git 2.x: removing the `**` line silently re-ignores the entire skill body.
+# If the `**` line ever looks redundant, re-run the empirical test (touch
+# a file under .claude/skills/write-notion-report/, run `git check-ignore -v`
+# on it) before removing.
 !.claude/skills/write-notion-report/
 !.claude/skills/write-notion-report/**
 routine_config.json
