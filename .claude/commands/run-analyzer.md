@@ -108,7 +108,7 @@ This step implements ANALYSIS-05 and D-08 from `.planning/phases/02-honest-analy
    - **Notice regressions.** Was a video a top performer two reports ago and isn't now?
 5. Do NOT cite the prior reports in the new report's prose (D-08). The standalone-tone rule in CLAUDE.md ("assume Kyle has not seen the previous week's report") holds. Cross-week framing is allowed per D-09 only when self-contained.
    - Allowed example: `"For the third consecutive week, tool-specific tutorials are pulling 4×+ the views of conceptual videos."`
-   - Banned phrases: `"as we said last week"`, `"as noted previously"`, `"the prior report"`, `"this continues the trend we observed"`, `"as noted"`.
+   - Banned phrases: `"as we said last week"`, `"as noted previously"`, `"the prior report"`, `"this continues the trend we observed"`. (The bare phrase `"as noted"` is intentionally NOT in this list because it false-positives on legitimate prose like `"as noted in the data"` or `"as noted above"`. The fuller `"as noted previously"` already catches the prior-report-citation case.)
 6. Record the dates actually consulted as a JSON array of `YYYY-MM-DD` strings (e.g., `["2026-05-18", "2026-05-11", "2026-05-04"]`). Hold this list in working memory until Step 10 (write summary.json) writes it to `summary.json.prior_reports_consulted` (D-10). If zero prior reports were consulted (the archive is empty), the recorded value is `[]`. Verify at draft time that the list does not include today's `run_date`. Same-day retries belong to "this run", not the calibration archive.
 
 Zero-or-few-priors handling: if fewer than three reports exist (or none), read what is there and continue. Do not block. The first Phase 2 run will have at most one prior report (the Phase 1 report from 2026-05-25).
@@ -274,7 +274,7 @@ Voice checks (REPORT-03, per CLAUDE.md § "Voice"):
 - [ ] First-person plural ("we tried", "what we are seeing") used where it fits, per CLAUDE.md § "Voice" ("Kyle and the audience are figuring this out together"). A draft written entirely in third person or marketing-impersonal voice fails this check even if every other voice item passes.
 
 Prior-report citation checks (D-08 / D-09, per CLAUDE.md § "Report structure"):
-- [ ] No prior-report citations in prose. Banned phrases: "as we said last week", "as noted previously", "the prior report", "this continues the trend we observed", "as noted".
+- [ ] No prior-report citations in prose. Banned phrases: "as we said last week", "as noted previously", "the prior report", "this continues the trend we observed". (The bare phrase "as noted" is intentionally excluded from this list to avoid false-positives on legitimate prose like "as noted in the data"; "as noted previously" above already catches the prior-report case.)
 - [ ] Multi-week claims (if any) stand on their own without requiring the reader to have seen a prior report (D-09 example: "For the third consecutive week, X has held." is allowed).
 
 Provenance check (per CLAUDE.md § "Verification & Evidence"):
