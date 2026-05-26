@@ -5,9 +5,9 @@ How to extend the analyzer without breaking the contract it has with the operato
 ## Adding a new SQL query
 
 1. Add the file to `sql/` with a numeric prefix (`05_*.sql`, `06_*.sql`) so the run order stays obvious.
-2. Reference the dataset by `BQ_DATASET` (default `youtube_analytics`) — don't hardcode a project.
+2. Reference the dataset by `BQ_DATASET` (default `youtube_analytics`). Don't hardcode a project.
 3. If the query touches a table whose grain or join keys aren't already covered in `BUSINESS_RULES.md` § "Table grain and join keys (data contract)", extend that section first and reference it from the query's comment header.
-4. Make sure the query, when its result is dumped to JSON, stays small enough to commit (~hundreds of KB is fine, multi-MB is not). The dataset is small for now — revisit if a query ever returns thousands of rows.
+4. Make sure the query, when its result is dumped to JSON, stays small enough to commit (~hundreds of KB is fine, multi-MB is not). The dataset is small for now; revisit if a query ever returns thousands of rows.
 5. Add the file to the list the analyzer runs each week (in `CLAUDE.md` or wherever the analyzer's query manifest lives).
 6. Add a `CHANGELOG.md` entry.
 
@@ -24,7 +24,7 @@ How to extend the analyzer without breaking the contract it has with the operato
 
 Sometimes a "pattern worth watching" turns out to be noise. To retire it:
 
-1. Note the date and the reason in `CHANGELOG.md` (e.g., "Retired the 'Tuesday upload bump' hypothesis — held at low confidence for 8 weeks, didn't strengthen.").
+1. Note the date and the reason in `CHANGELOG.md` (e.g., "Retired the 'Tuesday upload bump' hypothesis. Held at low confidence for 8 weeks, didn't strengthen.").
 2. The analyzer reads recent reports as memory, so just not surfacing the pattern again is enough on the report side. The changelog entry is what keeps the decision auditable.
 
 ## Running the analyzer manually
@@ -46,6 +46,6 @@ If a scheduled run errored partway through, the analyzer should have still writt
 
 ## What you should _not_ do
 
-- Don't delete an old report from `reports/` to "clean up." The archive is more useful with every weak-looking week left in it — that's how you see the channel's real volatility.
+- Don't delete an old report from `reports/` to "clean up." The archive is more useful with every weak-looking week left in it; that's how you see the channel's real volatility.
 - Don't backfill reports. The whole archive's value is that each entry reflects what the analyzer actually knew that week.
 - Don't hardcode the video count, the dataset name, or thresholds that `BUSINESS_RULES.md` already governs. If you need a value the rules don't cover, add it to the rules first.
