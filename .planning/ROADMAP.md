@@ -80,12 +80,12 @@
   3. `docs/schedule.md` walks an operator through setting up the weekly Monday 9am Phoenix `/schedule` routine in both local (Claude Code terminal) and cloud (claude.ai routine) variants, and the `write-notion-report` Skill works identically in both contexts without code changes
   4. `docs/runbook.md` contains a named recovery section for each failure mode (bq auth, missing table, empty table, Notion write fail, missing env var), and any new failure mode encountered during the build is added there plus logged in `CHANGELOG.md` as part of the fix
 
-**Plans:** 4 plans
+**Plans:** 2/4 plans executed
 
 **Wave 1** *(parallel)*
 
-- [ ] 03-01-PLAN.md — Fix `scripts/csv_fallback_loader.py` UTC bugs (`:55`, `:145`), add `--snapshot-date` arg; clean up `requirements.txt` cross-ref rot; CHANGELOG entry. (CSV-01)
-- [ ] 03-02-PLAN.md — Create `scripts/csv_query.py` stdlib helper emitting `bq --format=json`-shaped JSON for the three queries the recipe runs (data_health, top_full_length_videos, eligible_video_count). (CSV-01, CSV-02)
+- [x] 03-01-PLAN.md — Fix `scripts/csv_fallback_loader.py` UTC bugs (`:55`, `:145`), add `--snapshot-date` arg; clean up `requirements.txt` cross-ref rot; CHANGELOG entry. (CSV-01)
+- [x] 03-02-PLAN.md — Create `scripts/csv_query.py` stdlib helper emitting `bq --format=json`-shaped JSON for the three queries the recipe runs (data_health, top_full_length_videos, eligible_video_count). (CSV-01, CSV-02)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -101,7 +101,7 @@
 |-------|----------------|--------|-----------|
 | 1. First Notion Report End-to-End | 4/4 | Complete   | 2026-05-25 |
 | 2. Honest Analyst Depth | 3/3 | Complete    | 2026-05-26 |
-| 3. CSV Parity and Operational Polish | 0/4 | Ready to execute | - |
+| 3. CSV Parity and Operational Polish | 2/4 | In Progress|  |
 
 ## Coverage Summary
 
