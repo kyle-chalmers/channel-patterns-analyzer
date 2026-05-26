@@ -9,11 +9,13 @@ Usage:
     python scripts/csv_fallback_loader.py
 """
 
+import argparse
 import csv
 import os
 import random
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SAMPLE_DIR = REPO_ROOT / "sample_data"
@@ -48,11 +50,14 @@ def _format_duration(seconds: int) -> str:
 
 def generate_video_metadata(snapshot: date) -> list[dict]:
     rows: list[dict] = []
+    phoenix = ZoneInfo("America/Phoenix")
+    snapshot_midnight = datetime.combine(snapshot, datetime.min.time(), tzinfo=phoenix)
     for vid, title, dur, vtype, days_ago in SAMPLE_VIDEOS:
+        published_at = snapshot_midnight - timedelta(days=days_ago)
         rows.append({
             "video_id": vid,
             "title": title,
-            "published_at": (datetime.combine(snapshot, datetime.min.time()) - timedelta(days=days_ago)).isoformat() + "Z",
+            "published_at": published_at.isoformat(),
             "duration_seconds": dur,
             "duration_formatted": _format_duration(dur),
             "video_type": vtype,
@@ -141,8 +146,20 @@ def _write(table_name: str, rows: list[dict]) -> None:
     print(f"  wrote {len(rows)} rows -> {path.relative_to(REPO_ROOT)}")
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Generate sample_data/ CSV fixtures mirroring the youtube_analytics schema.",
+    )
+    parser.add_argument("--snapshot-date", type=date.fromisoformat, default=None, help=(
+        "Override the snapshot date (YYYY-MM-DD). Defaults to today's Phoenix date. "
+        "Use to generate fixtures for testing stale-data paths."
+    ))
+    return parser.parse_args()
+
+
 def main() -> None:
-    snapshot = date.today()
+    args = parse_args()
+    snapshot = args.snapshot_date or datetime.now(ZoneInfo("America/Phoenix")).date()
     print(f"Generating sample data for snapshot_date = {snapshot}")
     _write("video_metadata", generate_video_metadata(snapshot))
     _write("daily_video_stats", generate_daily_video_stats(snapshot))
