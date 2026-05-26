@@ -246,22 +246,27 @@ Walking commits `4baf347`..`a1d6483` plus `runs/2026-05-25/summary.json.warnings
 
 ## Cloud Routine Setup Walkthrough Requirements
 
-Verified live against https://code.claude.com/docs/en/routines, 2026-05-26. D-04 says the walkthrough needs concrete field names. Here they are:
+Verified live against https://code.claude.com/docs/en/routines AND screenshots of the actual claude.com → Claude Code → Routines → New routine form (2026-05-26). D-04 says the walkthrough needs concrete field names. Here they are.
+
+> **2026-05-26 architecture correction.** This section was originally written under the wrong premise that the Instructions/Prompt field is a paste-target for `.claude/commands/run-analyzer.md`. Screenshots confirm: the routine has a **Select a repository** dropdown that attaches the GitHub repo, and the routine reads the recipe from the repo at run time. The Instructions field is a short imperative prompt, not a recipe paste. Field list below reflects the corrected understanding; the slash-command auto-discovery behavior in the routine context is not 100% confirmed, so the walkthrough plans for both modes (canonical + fallback).
 
 ### Routine creation form fields (in display order)
 
-1. **Routine name** — free-text input. Recommended value: `channel-patterns-analyzer-weekly` (matches CONTEXT.md "Specific Ideas" recommendation).
-2. **Prompt** (the system prompt input box) — multiline text. Includes a model selector. **Paste-target for `.claude/commands/run-analyzer.md`.** Model: recommend Sonnet 4.5 or Opus 4.x depending on what's current; the recipe doesn't depend on any model-specific feature, but draft quality benefits from larger context.
-3. **Repositories** — multi-select GitHub repo picker. Recommended: select `channel-patterns-analyzer`. Recipe Step 4 prior-report read depends on the repo being cloned, so this is non-optional.
-4. **Environment** — dropdown. Use the **Default** environment (network access `Trusted`, no custom setup script needed for BigQuery MCP path).
-5. **Select a trigger** — pick **Schedule**, then a preset:
-   - Frequency: **Weekly**
-   - Day: **Monday**
-   - Time: **9:00 AM**
-   - Timezone selector: **America/Phoenix** (the form's note says "Times are entered in your local zone and converted automatically" — if Kyle's machine is already on Phoenix time, just set 9am; otherwise pick the timezone explicitly).
-6. **Connectors** section (at bottom of form, in a Connectors tab) — verify the **BigQuery (Google Cloud)** and **Notion** connectors are listed. Both should already be enabled in Kyle's account per CONTEXT.md D-01 ("Kyle confirmed BigQuery MCP authorized 2026-05-25"). Remove any other connectors that aren't needed (Slack, Linear, etc.).
-7. **Permissions** section — default is fine. The recipe writes to local files inside the cloned repo (`reports/`, `runs/`) and pushes via Claude's normal `claude/`-prefixed branch flow.
-8. **Environment variables** — NOT a top-level form field; live under the environment's settings. To set: open the environment's settings via the cloud icon below the Instructions box → settings icon → Environment variables. Add three:
+1. **Name** — free-text input. Recommended value: `channel-patterns-analyzer-weekly` (matches CONTEXT.md "Specific Ideas" recommendation).
+2. **Instructions** — multiline text input ("Describe what Claude should do in each session"). Includes a model selector (default Opus 4.7 1M context per screenshot). This is a **short imperative prompt**, NOT a paste target. Canonical value (locked in CONTEXT.md D-02-R):
+
+   > Help me wrap this analyzer as a Claude Code routine that runs every Monday at 9am using /schedule. The routine should run the analyzer end-to-end — query the youtube_analytics dataset in BigQuery, run analysis, call the write-notion-report skill, write to my channel-patterns Notion page.
+
+   **Fallback if `/run-analyzer` does not auto-resolve** (slash-command discovery in routine context is not confirmed): expand the Instructions to explicitly point at the recipe path, e.g. "Follow the recipe in `.claude/commands/run-analyzer.md` end-to-end." Smoke-test (D-03) catches which mode actually fires; the walkthrough documents both.
+3. **Select a repository** — dropdown picker labeled "Select a repository" at the bottom of the Instructions box. Required: `kyle-chalmers/channel-patterns-analyzer`. Without a repo selected, the routine cannot read the recipe; the GitHub event trigger is also blocked ("Select a repository first").
+4. **Select a trigger** — three options visible in the screenshot:
+   - **Schedule** (✓ used here) — cron-driven. Set Weekly + Monday + 9:00 AM + America/Phoenix.
+   - **GitHub event** — disabled unless a repo is attached; not the trigger we want.
+   - **API** — external POST request; not used.
+5. **Connectors** tab — the screenshot shows 11 connectors attached by default (Atlassian Rovo, Canva, Gmail, Google Calendar, Google Cloud BigQuery, Google Drive, Microsoft Learn, Miro, Notion, Vercel, Zapier). The routine ONLY needs **Google Cloud BigQuery** and **Notion**. Remove the other 9 to satisfy the disclaimer banner: "Claude can use all tools from these connectors — including writes — without asking for permission during runs. Remove any you don't want the agent to access." This is the principle-of-least-privilege step.
+6. **Behavior** tab — defaults are fine for v1. Surfaces only if the smoke test reveals a misbehavior to constrain (e.g., "don't commit to main without asking").
+7. **Permissions** tab — defaults are fine for v1. Same rationale.
+8. **Environment variables** — NOT in the routine form itself; live under the **environment's settings** (icon to the right of the Instructions box, below the model selector). Open environment → settings → Environment variables. Add three:
    - `NOTION_REPORT_PAGE_ID=<from Kyle's .env>`
    - `BQ_PROJECT=primeval-node-478707-e9` (the value used in the 2026-05-25 live run)
    - `BQ_DATASET=youtube_analytics`
