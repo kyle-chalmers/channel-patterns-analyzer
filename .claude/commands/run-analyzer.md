@@ -150,11 +150,11 @@ Derive the channel-wide confidence label from `eligible_count` per CLAUDE.md § 
 
 | `eligible_count` | label |
 |---|---|
-| `< 5` (i.e., n=4 or fewer) | `low confidence` |
-| `5 to 10` (i.e., n=5, 6, 7, 8, 9, 10) | `moderate confidence` |
-| `>= 10` (i.e., n=10 or more; the table reads `10 or more` per CLAUDE.md) | `standard confidence` |
+| `< 5` (n=1, 2, 3, 4) | `low confidence` |
+| `5 <= n < 10` (n=5, 6, 7, 8, 9) | `moderate confidence` |
+| `>= 10` (n=10 or more) | `standard confidence` |
 
-Boundary clarification (verified A6 in `02-RESEARCH.md`): `n=4` → low, `n=5` → moderate, `n=10` → standard. CLAUDE.md's "5 to 10" range is inclusive of 5; "10 or more" is inclusive of 10. The standard-tier boundary wins at exactly 10.
+The table ranges are non-overlapping. `n=10` falls into the standard-tier row only. This resolves the documented ambiguity in CLAUDE.md § "Small samples get hedged" where "5 to 10" and "10 or more" both name n=10; the standard-tier boundary wins, verified as A6 in `02-RESEARCH.md`. The downstream `confidence_thresholds_correct` audit check (Step 7) validates this exact mapping.
 
 Cache the channel-wide eligible count for the duration of the run; the draft step uses it for any claim drawn from the full eligible set. Sub-population claims (e.g., "only tutorials") MUST scope their own counts and cite the sub-population `n`, not the channel-wide eligible count (per RESEARCH.md Pitfall 2, a tutorial-only claim cites `n=7`, not the channel-wide `n=18`).
 
