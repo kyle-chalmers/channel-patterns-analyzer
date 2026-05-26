@@ -32,6 +32,7 @@ Validation order, first failure wins:
 3. `run_date` matches `^\d{4}-\d{2}-\d{2}$`.
 4. `data_health` is a dict and contains `snapshot_dates` (dict) and `stale_tables` (list).
 5. `working`, `not_working`, `patterns` are lists. `open_questions` is a list. `markdown_body` is a non-empty string.
+6. `headline` is a string. Empty `headline` is allowed only when `data_health.stale_tables` is non-empty (the "data is stale" carve-out from the input contract above). If `headline == ""` AND `len(data_health.stale_tables) == 0`, return `input_invalid` with the message `"headline is empty and no stale tables are flagged"`. Without this check, a draft step that silently dropped the Headline section would publish an empty paragraph block under the Headline heading and Step 8's key-presence validation would not catch it.
 
 Any failure at this stage returns `{ "ok": false, "error": <human-readable>, "category": "input_invalid" }`. No MCP call has been made yet, so there is no transport state to clean up.
 
@@ -161,7 +162,7 @@ Canonical error categories (the runbook's section headings map one-to-one to the
 
 | Category | When to emit |
 |---|---|
-| `input_invalid` | The input dict failed validation (missing key, wrong type, malformed `run_date`, empty `markdown_body`). No MCP call was made. |
+| `input_invalid` | The input dict failed validation (missing key, wrong type, malformed `run_date`, empty `markdown_body`, or empty `headline` when no stale tables are flagged). No MCP call was made. |
 | `env_missing` | `NOTION_REPORT_PAGE_ID` is unset or empty. No MCP call was made. |
 | `parent_not_found` | The preflight `notion-fetch` returned 404 `object_not_found`, OR the create call returned 400 `validation_error` referencing `parent.page_id`. The parent UUID is wrong, malformed, or the page was deleted. |
 | `permission_denied` | The preflight or create call returned 404 because the Notion integration cannot see the page. (Notion intentionally returns 404 rather than 403 for missing-access cases, to avoid leaking page existence.) Recovery: re-add the integration to the parent page in Notion. |
