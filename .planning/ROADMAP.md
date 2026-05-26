@@ -80,7 +80,7 @@
   3. `docs/schedule.md` walks an operator through setting up the weekly Monday 9am Phoenix `/schedule` routine in both local (Claude Code terminal) and cloud (claude.ai routine) variants, and the `write-notion-report` Skill works identically in both contexts without code changes
   4. `docs/runbook.md` contains a named recovery section for each failure mode (bq auth, missing table, empty table, Notion write fail, missing env var), and any new failure mode encountered during the build is added there plus logged in `CHANGELOG.md` as part of the fix
 
-**Plans:** 2/4 plans executed
+**Plans:** 3/4 plans executed
 
 **Wave 1** *(parallel)*
 
@@ -89,7 +89,7 @@
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 03-03-PLAN.md — Add `DATA_SOURCE=csv` branch to `.claude/commands/run-analyzer.md` (three-branch transport probe + CSV dispatch in Steps 2/3/5 + top-of-report annotation); dereference six `.planning/` prose references the cloud routine can't resolve; rewrite cloud-routine section of `docs/schedule.md` with numbered field-by-field walkthrough (D-04) + four-item Run-now checklist (D-03); fix portability bug in schedule.md:20 (D-01); clean up `.env.example` to four real env vars. (CSV-01, CSV-02, SCHED-01, SCHED-02)
+- [x] 03-03-PLAN.md — Add `DATA_SOURCE=csv` branch to `.claude/commands/run-analyzer.md` (three-branch transport probe + CSV dispatch in Steps 2/3/5 + top-of-report annotation); dereference six `.planning/` prose references the cloud routine can't resolve; rewrite cloud-routine section of `docs/schedule.md` with numbered field-by-field walkthrough (D-04) + four-item Run-now checklist (D-03); fix portability bug in schedule.md:20 (D-01); clean up `.env.example` to four real env vars. (CSV-01, CSV-02, SCHED-01, SCHED-02)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -101,7 +101,7 @@
 |-------|----------------|--------|-----------|
 | 1. First Notion Report End-to-End | 4/4 | Complete   | 2026-05-25 |
 | 2. Honest Analyst Depth | 3/3 | Complete    | 2026-05-26 |
-| 3. CSV Parity and Operational Polish | 2/4 | In Progress|  |
+| 3. CSV Parity and Operational Polish | 3/4 | In Progress|  |
 
 ## Coverage Summary
 
