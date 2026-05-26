@@ -63,12 +63,19 @@ The dataset is small enough (~23 videos across 4 tables) that committing raw que
       "empty_sections_render_with_explicit_body",
       "stale_table_disclaimers_present",
       "age_control_enforced",
+      "cross_age_window_labeled",
+      "trending_claims_have_minimum_age",
       "confidence_labels_present",
+      "confidence_n_matches_comparison_set",
+      "confidence_thresholds_correct",
       "no_em_dashes",
+      "no_en_dashes_as_punctuation",
       "no_banned_vocab",
       "no_formulaic_openers",
       "first_person_plural_where_it_fits",
-      "no_prior_report_citation"
+      "no_prior_report_citation",
+      "multi_week_claims_self_contained",
+      "numbers_match_underlying_query_results"
     ],
     "fixes_applied": [
       {"section": "Patterns worth watching", "fix": "Replaced em dash with comma in framing of tool-tutorials trend"},
@@ -87,7 +94,7 @@ Always write `summary.json`, even on failure. A failed run with `errors: [...]` 
 
 `voice_audit` is the audit trail of the self-audit step (Step 7 in `.claude/commands/run-analyzer.md`), added by Phase 2 Plan 02-03 (D-01 Layer 2). The step is a copy-into-response checklist the analyzer walks against the assembled draft before invoking `write-notion-report`; the publish gate is explicit, so the Skill is not invoked while any item remains unticked.
 
-- `checks_passed` is the list of canonical check identifiers (snake-case names, defined in the recipe's Step 7) that the analyzer ticked through cleanly. Includes identifiers like `six_sections_in_order`, `age_control_enforced`, `confidence_labels_present`, `no_em_dashes`, `no_banned_vocab`, `no_formulaic_openers`, `first_person_plural_where_it_fits`, `no_prior_report_citation`, and `stale_table_disclaimers_present`. The full set lives in the recipe and should be re-derived from there, not duplicated here.
+- `checks_passed` is the list of canonical check identifiers (snake-case names, defined in the recipe's Step 7) that the analyzer ticked through cleanly. The example above lists the full 17-identifier set in the same order the recipe documents them (`six_sections_in_order`, `empty_sections_render_with_explicit_body`, `stale_table_disclaimers_present`, `age_control_enforced`, `cross_age_window_labeled`, `trending_claims_have_minimum_age`, `confidence_labels_present`, `confidence_n_matches_comparison_set`, `confidence_thresholds_correct`, `no_em_dashes`, `no_en_dashes_as_punctuation`, `no_banned_vocab`, `no_formulaic_openers`, `first_person_plural_where_it_fits`, `no_prior_report_citation`, `multi_week_claims_self_contained`, `numbers_match_underlying_query_results`). The recipe is the source of truth; if the recipe's identifier list changes, re-derive this list rather than maintaining the two in parallel.
 - `fixes_applied` is the list of inline fixes the self-audit made before publishing. Each entry has `section` (the report section where the fix landed, e.g., `"What is working"`, `"Patterns worth watching"`, or `"(audit)"` for items the audit could not verify and noted) and `fix` (a one-line description of what changed). Empty array means the draft passed cleanly with no fixes needed.
 
 A missing `voice_audit` block on an otherwise-successful run is itself a finding: the self-audit step did not execute. Enforcement is markdown, not code, so the absence is the only after-the-fact signal that the gate was skipped. Next-run analysts should investigate any prior run whose `summary.json` lacks `voice_audit`.
