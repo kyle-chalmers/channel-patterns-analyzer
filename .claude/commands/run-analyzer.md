@@ -23,10 +23,12 @@ Before drafting any prose for the report, read `CLAUDE.md` (voice, age control, 
 
 ## Step 1: Probe transports
 
-Probe the session for an available BigQuery transport, in this order:
+**Operator override (checked before auto-detection):** if `BQ_TRANSPORT` is set to `bq_cli` or `bq_mcp`, use that value verbatim as `TRANSPORT` and skip the auto-detect probe below. If `BQ_TRANSPORT` is set to any other value, record `warnings: ["bq_transport_invalid: <value>; falling back to auto-detect"]` in `summary.json` (held in working memory until Step 10) and continue with auto-detection. This override is the smoke-test hook documented at the bottom of this step; without it the `bq_mcp` branch is unreachable on Kyle's laptop because `bq` is always on PATH and the probe below would always pick `bq_cli`.
+
+Otherwise, probe the session for an available BigQuery transport, in this order:
 
 - Try `command -v bq` via Bash. If `bq` is on PATH, set `TRANSPORT=bq_cli`.
-- Else check whether `mcp__claude_ai_Google_Cloud_BigQuery__execute_sql_readonly` is loaded in the session. If yes, set `TRANSPORT=bq_mcp`.
+- Else check whether `mcp__claude_ai_Google_Cloud_BigQuery__execute_sql_readonly` is loaded in the session. The agent can introspect the list of available tools at session start (the same list surfaced by the runtime's tool-discovery API); if the tool name appears in that list, the transport is available and `TRANSPORT=bq_mcp`. There is no way to test this from a shell; it requires the agent's own session-tool introspection.
 - Else write `runs/{run_date}/summary.json` with `errors: [{"category": "no_bigquery_transport", "message": "neither bq CLI nor BigQuery MCP available", "step": "transport_probe"}]` and STOP.
 
 Invocation shapes (use verbatim):
