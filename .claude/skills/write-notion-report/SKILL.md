@@ -90,9 +90,9 @@ Per-section block mapping (Phase 1):
 | Title (page title) | Set via `properties.title`, not emitted as a child block |
 | Data Health | `heading_2("Data Health")`, then one `paragraph` (or `table`-shaped paragraph) for the per-table snapshot summary, then one `callout` per entry in `data_health.stale_tables` with `icon.emoji = "⚠️"` and `color = "yellow_background"` |
 | Headline | `divider`, `heading_2("Headline")`, `paragraph(headline text)` |
-| What is working | `divider`, `heading_2("What is working")`, one or more `paragraph` blocks rendered from `markdown_body`. If the section is empty in Phase 1, the placeholder text from `markdown_body` ("Not analyzed in this run, see Phase 2 for the full analytical pass") renders as a single `paragraph`. NEVER omit the heading. |
-| What is not working | `divider`, `heading_2("What is not working")`, `paragraph` from `markdown_body` (placeholder text in Phase 1) |
-| Patterns worth watching | `divider`, `heading_2("Patterns worth watching")`, `paragraph` from `markdown_body` (placeholder text in Phase 1) |
+| What is working | `divider`, `heading_2("What is working")`, one or more blocks rendered from whatever `markdown_body` contains for the section. The recipe (Step 6 § 3) supplies real findings or one of two explicit empty-state lines: `Nothing material to report this week.` or the D-12 stale-table disclaimer (e.g., `Watch-time and traffic-source analysis is unavailable: daily_video_analytics is 89 days stale (see Data Health).`). The Skill renders the literal `markdown_body` text without inspecting the line; do not enforce a specific placeholder string here. NEVER omit the heading. |
+| What is not working | `divider`, `heading_2("What is not working")`, blocks from `markdown_body` (same empty-state rules as above) |
+| Patterns worth watching | `divider`, `heading_2("Patterns worth watching")`, blocks from `markdown_body` (same empty-state rules as above) |
 | Open questions | `divider`, `heading_2("Open questions")`, one `bulleted_list_item` per entry in `open_questions`, or a single `paragraph` saying "None recorded this run." if the list is empty |
 
 Per-line classifier (applied to each logical block from `markdown_body`):
@@ -106,7 +106,7 @@ Per-line classifier (applied to each logical block from `markdown_body`):
 7. Line matches the stale-table flag pattern (regex: a table name from `data_health.snapshot_dates` keys, followed by `: <N> days stale`, OR contains the `⚠` character) AND we are inside the Data Health section → `callout` with `icon.emoji = "⚠️"` and `color = "yellow_background"`
 8. Default → `paragraph`
 
-Empty Phase-1 sections (`What is not working`, `Patterns worth watching`, `Open questions`) MUST be emitted with their `heading_2` plus the placeholder paragraph already present in `markdown_body`. NEVER silently omit a section. This preserves the contract in `CLAUDE.md` § "Report structure" while letting Phase 1 ship without Phase-2 analytical depth.
+Empty sections MUST be emitted with their `heading_2` plus whatever the recipe placed in `markdown_body` for that section (an explicit `Nothing material to report this week.` paragraph or a D-12 stale-table disclaimer). NEVER silently omit a section heading. The Skill does not interpret the body string; the recipe's Step 6 owns the empty-state wording.
 
 Paragraph chunking: Notion's `text.content` field caps at 2,000 characters. To stay safely under that cap, split any logical block whose rich-text content exceeds 1,900 characters into multiple blocks of the same type. Phase 1 paragraphs are well under 500 characters, so this guard is defensive but mandatory.
 
