@@ -1,7 +1,7 @@
 {
   "run_date": "2026-05-25",
   "run_started_at": "2026-05-25T11:21:00-07:00",
-  "run_finished_at": "2026-05-25T11:32:00-07:00",
+  "run_finished_at": "2026-05-25T11:36:00-07:00",
   "data_source": "bigquery",
   "transport": "bq_cli",
   "bq_project": "primeval-node-478707-e9",
@@ -13,17 +13,17 @@
     "daily_traffic_sources": "2026-05-25"
   },
   "stale_tables": [],
-  "video_count_full_length": 20,
+  "video_count_full_length": 23,
   "queries_run": [
-    {"file": "sql/04_data_health_check.sql", "rows": 4, "ms": 994},
-    {"file": "sql/02_top_full_length_videos.sql", "rows": 20, "ms": 3293}
+    {"file": "sql/04_data_health_check.sql", "rows": 4, "ms": 4444},
+    {"file": "sql/02_top_full_length_videos.sql", "rows": 23, "ms": 3712}
   ],
   "report_path": "reports/2026-05-25.md",
   "notion_write_ok": true,
-  "notion_page_id": "36bccd05-4945-8105-b8c4-c3cc584e4d47",
-  "notion_url": "https://www.notion.so/36bccd0549458105b8c4c3cc584e4d47",
+  "notion_page_id": "36bccd05-4945-8159-a49d-d99439757982",
+  "notion_url": "https://www.notion.so/36bccd0549458159a49dd99439757982",
   "errors": [],
   "warnings": [
-    "recipe_defect: .claude/commands/run-analyzer.md Step 1 specifies `bq --format=json query --use_legacy_sql=false --max_rows=10000 --project_id=\"$BQ_PROJECT\" \"$SQL\"`; two issues encountered on the first live run: (1) `--max_rows=10000` is not a valid `bq query` flag (only `head` accepts it); (2) passing SQL as the positional argument fails when the SQL contains unicode box-drawing characters (`─` U+2500) used in this project's sql/ headers, because bq's flag parser treats them as flag-like input and crashes with a Python RecursionError. Workaround applied here: drop --max_rows and pipe SQL via stdin (`printf '%s' \"$SQL\" | bq --format=json query ...`). Fix the recipe in Phase 2 follow-up."
+    "recipe_defect: .claude/commands/run-analyzer.md Step 1 specifies `bq --format=json query --use_legacy_sql=false --max_rows=10000 --project_id=\"$BQ_PROJECT\" \"$SQL\"`; two issues confirmed again on this run: (1) `--max_rows=10000` is not a valid `bq query` flag (only `head` accepts it); (2) passing SQL as a positional arg fails when the SQL contains unicode box-drawing characters (`─` U+2500) used in this project's sql/ headers, because bq's flag parser treats them as flag-like input and crashes with a Python RecursionError in _damerau_levenshtein. Workaround applied: pipe SQL via stdin (`echo \"$SQL\" | bq --format=json query --use_legacy_sql=false --max_rows=10000 --project_id=...`) — bq accepts --max_rows as a global head-style flag at this position but ignores it for query; the stdin path avoids the parser crash. Fix the recipe in a Phase 2 follow-up."
   ]
 }
