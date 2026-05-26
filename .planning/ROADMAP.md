@@ -9,7 +9,7 @@
 
 - [x] **Phase 1: First Notion Report End-to-End** — Smallest viable analyzer run: data-health check + one BigQuery pull + minimal report + `write-notion-report` Skill produces a real child page on the channel-patterns Notion page (completed 2026-05-25)
 - [x] **Phase 2: Honest Analyst Depth** — Age control, small-sample hedging, six-section structure, prior-report calibration, and voice rules applied so the published report meets the CLAUDE.md bar (completed 2026-05-25)
-- [ ] **Phase 3: CSV Parity and Operational Polish** — `DATA_SOURCE=csv` reaches feature parity, weekly `/schedule` routine documented for local + cloud, runbook covers every failure mode encountered during the build
+- [x] **Phase 3: CSV Parity and Operational Polish** — `DATA_SOURCE=csv` reaches feature parity, weekly `/schedule` routine documented for local + cloud, runbook covers every failure mode encountered during the build (completed 2026-05-26)
 
 ## Phase Details
 
@@ -80,7 +80,7 @@
   3. `docs/schedule.md` walks an operator through setting up the weekly Monday 9am Phoenix `/schedule` routine in both local (Claude Code terminal) and cloud (claude.ai routine) variants, and the `write-notion-report` Skill works identically in both contexts without code changes
   4. `docs/runbook.md` contains a named recovery section for each failure mode (bq auth, missing table, empty table, Notion write fail, missing env var), and any new failure mode encountered during the build is added there plus logged in `CHANGELOG.md` as part of the fix
 
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans complete
 
 **Wave 1** *(parallel)*
 
@@ -93,7 +93,7 @@
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 03-04-PLAN.md — Expand `docs/runbook.md` from 6 to 13+ named sections (every recipe error category + cloud-specific failure modes RESEARCH.md inventoried); fix portability bug in runbook.md:23 (service-account-key reference, conflicts with D-01); fix `BUSINESS_RULES.md §N` cross-ref rot in `docs/maintenance.md`; add ERR-03 closing instruction to recipe Step 11. (ERR-01, ERR-03)
+- [x] 03-04-PLAN.md — Expand `docs/runbook.md` from 6 to 13+ named sections (every recipe error category + cloud-specific failure modes RESEARCH.md inventoried); fix portability bug in runbook.md:23 (service-account-key reference, conflicts with D-01); fix `BUSINESS_RULES.md §N` cross-ref rot in `docs/maintenance.md`; add ERR-03 closing instruction to recipe Step 11. (ERR-01, ERR-03)
 
 ## Progress
 
@@ -101,7 +101,7 @@
 |-------|----------------|--------|-----------|
 | 1. First Notion Report End-to-End | 4/4 | Complete   | 2026-05-25 |
 | 2. Honest Analyst Depth | 3/3 | Complete    | 2026-05-26 |
-| 3. CSV Parity and Operational Polish | 3/4 | In Progress|  |
+| 3. CSV Parity and Operational Polish | 4/4 | Complete   | 2026-05-26 |
 
 ## Coverage Summary
 
