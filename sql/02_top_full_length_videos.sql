@@ -15,6 +15,15 @@
 -- tables only; extension to all four analytics tables is deferred (see sql/01
 -- and Phase 2 D-06).
 --
+-- NULL-guard: if either source table is empty, MAX(snapshot_date) returns NULL
+-- and LEAST(NULL, X) returns NULL, so the equality filter
+-- `m.snapshot_date = NULL` never matches and the query returns zero rows. That
+-- is indistinguishable from "no full-length videos exist" at the recipe layer.
+-- The recipe's Step 2 data-health check is the primary guard (it routes empty
+-- source tables to a STOP before this query runs), but the IS NOT NULL guard
+-- below makes the intent explicit at the SQL layer too, so the failure mode
+-- doesn't reappear if the recipe order changes.
+--
 -- Note on duration_formatted: this column is a custom field produced by the
 -- youtube-bigquery-pipeline ingest job, not a native YouTube API field. If your own
 -- pipeline lands `duration_seconds` only, derive `duration_formatted` in the SELECT
@@ -39,6 +48,7 @@ SELECT
 FROM `youtube_analytics.video_metadata` m
 JOIN `youtube_analytics.daily_video_stats` s
     USING (video_id, snapshot_date)
-WHERE m.snapshot_date = (SELECT snapshot_date FROM latest_common)
+WHERE (SELECT snapshot_date FROM latest_common) IS NOT NULL
+    AND m.snapshot_date = (SELECT snapshot_date FROM latest_common)
     AND m.video_type = 'full_length'
 ORDER BY s.view_count DESC;

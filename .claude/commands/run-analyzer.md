@@ -15,7 +15,11 @@ Before drafting any prose for the report, read `CLAUDE.md` (voice, age control, 
 2. Compute the run date in Phoenix time: `run_date = $(TZ=America/Phoenix date +%Y-%m-%d)`. Phoenix is UTC-7 year-round (no DST). Use this `{run_date}` value everywhere downstream.
 3. `mkdir -p runs/{run_date}/queries/ reports/`.
 4. If any required env var is missing, write a minimal `runs/{run_date}/summary.json` with `errors: [{"category": "env_missing", "message": "<NAME> not set", "step": "preflight"}]`, surface the operator message naming the missing var, and STOP. No transport probe, no queries.
-5. Argument handling: `/run-analyzer` takes no arguments. If `$ARGUMENTS` is non-empty, record a `warnings: ["arguments_ignored: <value>"]` entry in `summary.json` and continue. Do not interpret the argument as a flag.
+5. **Validate `BQ_DATASET` against BigQuery identifier rules.** `BQ_DATASET` is string-substituted into backtick-quoted SQL identifiers in Steps 2, 3, and 5 (e.g., `` `${BQ_DATASET}.video_metadata` ``). A value containing a backtick, a comma, or other BigQuery metacharacters could break out of the backtick quoting and either parse-error noisily or query an unintended dataset. Treat `BQ_DATASET` as a potentially-hostile input even though `.env` is operator-controlled (defense in depth).
+   - Required regex: `^[A-Za-z_][A-Za-z0-9_]*$` (BigQuery dataset identifier rules: letter or underscore start, then letters/digits/underscores).
+   - If `BQ_DATASET` fails this check, write `runs/{run_date}/summary.json` with `errors: [{"category": "env_invalid", "message": "BQ_DATASET contains non-identifier characters: <value>", "step": "preflight"}]`, surface the operator message naming the invalid env var, and STOP. No transport probe, no queries.
+   - `BQ_PROJECT` is passed to `bq` via `--project_id="$BQ_PROJECT"` (positional, never string-substituted into SQL) and to the MCP wrapper as a JSON argument, so it does not need the same treatment. Still reject obviously malformed values (empty after trim, contains whitespace) as a sanity check.
+6. Argument handling: `/run-analyzer` takes no arguments. If `$ARGUMENTS` is non-empty, record a `warnings: ["arguments_ignored: <value>"]` entry in `summary.json` and continue. Do not interpret the argument as a flag.
 
 ## Step 1: Probe transports
 
@@ -35,7 +39,7 @@ Invocation shapes (use verbatim):
 
 ## Step 2: Data health (HEALTH-01, HEALTH-02, HEALTH-03)
 
-Read `sql/04_data_health_check.sql`. Substitute every literal `youtube_analytics` in the file contents with the value of `$BQ_DATASET` (in-memory string replace; do not edit the file on disk). The file already uses `CURRENT_DATE('America/Phoenix')` per the Phase 1 scaffold fix, so no timezone substitution is needed.
+Read `sql/04_data_health_check.sql`. Substitute every literal `youtube_analytics` in the file contents with the value of `$BQ_DATASET` (in-memory string replace; do not edit the file on disk). The file already uses `CURRENT_DATE("America/Phoenix")` (double-quoted, the canonical form Plan 02-01 standardized on across `sql/02..04`), so no timezone substitution is needed.
 
 Dispatch the rewritten SQL to `$TRANSPORT`. Capture stdout to `runs/{run_date}/queries/data_health.json`. For `bq_cli`, capture stderr to `runs/{run_date}/queries/data_health.stderr` so the JSON capture stays clean. For `bq_mcp`, errors come back in the tool response itself, not stderr.
 
@@ -45,6 +49,14 @@ Parse the 4-row result. Each row has `table_name`, `latest_snapshot`, `days_stal
 - `stale_tables`: a list of strings like `"daily_video_analytics (89 days)"` for every row whose `days_stale > 3`.
 
 **`SIMULATE_STALE` override (testing only):** If the env var `SIMULATE_STALE` is set, parse it as a comma-separated list of `table_name:days` pairs and override the parsed `days_stale` for the named tables before computing `stale_tables`. Example: `SIMULATE_STALE="daily_video_analytics:89,daily_traffic_sources:89"` simulates the 89-day-stale state the channel had on 2026-05-24. The override mutates the in-memory `data_health` rows only; it does NOT modify the BigQuery result on disk (`runs/{run_date}/queries/data_health.json` still contains the real values). Record a `warnings: ["simulate_stale_applied: <value of SIMULATE_STALE>"]` entry in `summary.json` when the override fires, so the audit trail shows the data was synthetic. This exists because Phase 1's 89-day stale state on `daily_video_analytics` and `daily_traffic_sources` resolved on 2026-05-25, leaving no live way to exercise the stale-table disclaimer machinery (D-12) end-to-end. The override is a recipe-level seam; it does not require a CLI flag, an SQL edit, or a BigQuery change.
+
+**SIMULATE_STALE validation (required before applying any override):**
+
+1. Each comma-separated pair MUST match the regex `^(video_metadata|daily_video_stats|daily_video_analytics|daily_traffic_sources):\d+$`. Table-name typos (`daily_video_analytic:89`), garbage values (`../../etc/passwd:foo`), and non-integer days (`video_metadata:soon`) all fail this check.
+2. If ANY pair fails validation, do NOT partial-apply. Record `warnings: ["simulate_stale_invalid: <raw value of SIMULATE_STALE>"]` in `summary.json` and skip the override entirely. All four `data_health` rows keep their real `days_stale` values.
+3. If every pair passes validation but a `table_name` is not present in the parsed `data_health` rows (e.g., `sql/04` returned three rows instead of four), record `warnings: ["simulate_stale_table_not_in_health_rows: <table_name>"]` and continue applying the overrides that do match. A SQL/parser mismatch is worth surfacing without aborting the whole override.
+
+The silent-failure mode the validation prevents: an operator typos a table name to test the D-12 disclaimer rule, sees no stale flag in the report, and concludes the test passed when in fact the override never fired.
 
 Failure routing:
 
@@ -66,11 +78,27 @@ If the query returns zero rows, this is a BQ-03 failure: record `errors: [{"cate
 
 This step implements ANALYSIS-05 and D-08 from `.planning/phases/02-honest-analyst-depth/02-CONTEXT.md`. Run AFTER Step 3 (top-videos pull) and BEFORE the draft step.
 
-1. List existing reports excluding today's date (today's same-day retry, if any, belongs to "this run", not the calibration archive):
+1. Select the **3 most recent distinct prior dates** from `reports/`, excluding today's date (today's same-day retry, if any, belongs to "this run", not the calibration archive). Lexicographic `sort | tail -n 3` over filenames is wrong here: same-day retries (`YYYY-MM-DD-N.md`) sort after the original and would let a single prior date monopolize all three slots. Pick distinct dates first, then resolve each date to its canonical file:
    ```bash
-   ls reports/ | grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}(-[0-9]+)?\.md$' | grep -v "^${run_date}" | sort | tail -n 3
+   # 1a. Extract distinct prior dates (newest 3, excluding today):
+   prior_dates=$(ls reports/ \
+     | grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}(-[0-9]+)?\.md$' \
+     | sed -E 's/^([0-9]{4}-[0-9]{2}-[0-9]{2}).*/\1/' \
+     | sort -u \
+     | grep -v "^${run_date}$" \
+     | tail -n 3)
+
+   # 1b. For each selected date, the canonical report is either
+   #     `{date}.md` (steady state) or the highest-suffix `{date}-N.md`
+   #     (latest same-day retry wins as the canonical record for that date).
+   for d in $prior_dates; do
+     latest=$(ls reports/ | grep -E "^${d}(-[0-9]+)?\.md$" | sort -V | tail -n 1)
+     # read reports/$latest
+   done
    ```
-   The naming convention is `YYYY-MM-DD.md` (steady state) or `YYYY-MM-DD-N.md` (same-day retry); ISO-8601 lexicographic sort yields chronological order, and same-day retries sort after the original.
+   The naming convention is `YYYY-MM-DD.md` (steady state) or `YYYY-MM-DD-N.md` (same-day retry). The two-step selection (distinct dates first, then highest-suffix within each date) guarantees three different prior dates are read whenever three or more exist in the archive, which is what the calibration logic requires.
+
+   **Assertion:** The list of dates assembled in step 6 below (`prior_reports_consulted`) MUST contain only distinct `YYYY-MM-DD` values. If two same-date entries ever appear, the selection above failed and the run should record `warnings: ["prior_report_selection_duplicate_date: <date>"]` in `summary.json`.
 2. Read those files in full (zero, one, two, or three of them, whatever exists). Hold the content in working memory for the draft step.
 3. For each file read, also read its sibling `runs/{date}/summary.json` and capture the `snapshot_dates` map. This is the per-run snapshot calibration logic: confidence calibration uses the *observed* snapshot_dates from each prior run, not assumptions about state continuity. Critical context: the 89-day stale state on `daily_video_analytics` and `daily_traffic_sources` resolved between 2026-05-24 and 2026-05-25, so reading the prior `summary.json` is the only way to know which sections of each prior report were drawing from fresh vs. stale data at the time.
 4. Use prior reports to:
@@ -80,7 +108,7 @@ This step implements ANALYSIS-05 and D-08 from `.planning/phases/02-honest-analy
    - **Notice regressions.** Was a video a top performer two reports ago and isn't now?
 5. Do NOT cite the prior reports in the new report's prose (D-08). The standalone-tone rule in CLAUDE.md ("assume Kyle has not seen the previous week's report") holds. Cross-week framing is allowed per D-09 only when self-contained.
    - Allowed example: `"For the third consecutive week, tool-specific tutorials are pulling 4×+ the views of conceptual videos."`
-   - Banned phrases: `"as we said last week"`, `"as noted previously"`, `"the prior report"`, `"this continues the trend we observed"`, `"as noted"`.
+   - Banned phrases: `"as we said last week"`, `"as noted previously"`, `"the prior report"`, `"this continues the trend we observed"`. (The bare phrase `"as noted"` is intentionally NOT in this list because it false-positives on legitimate prose like `"as noted in the data"` or `"as noted above"`. The fuller `"as noted previously"` already catches the prior-report-citation case.)
 6. Record the dates actually consulted as a JSON array of `YYYY-MM-DD` strings (e.g., `["2026-05-18", "2026-05-11", "2026-05-04"]`). Hold this list in working memory until Step 10 (write summary.json) writes it to `summary.json.prior_reports_consulted` (D-10). If zero prior reports were consulted (the archive is empty), the recorded value is `[]`. Verify at draft time that the list does not include today's `run_date`. Same-day retries belong to "this run", not the calibration archive.
 
 Zero-or-few-priors handling: if fewer than three reports exist (or none), read what is there and continue. Do not block. The first Phase 2 run will have at most one prior report (the Phase 1 report from 2026-05-25).
@@ -101,14 +129,18 @@ WITH latest_common AS (
 SELECT
     COUNT(*) AS eligible_count,
     (SELECT COUNT(*) FROM `${BQ_DATASET}.video_metadata` m2
-        WHERE m2.snapshot_date = (SELECT snapshot_date FROM latest_common)
+        WHERE (SELECT snapshot_date FROM latest_common) IS NOT NULL
+          AND m2.snapshot_date = (SELECT snapshot_date FROM latest_common)
           AND m2.video_type = 'full_length') AS total_full_length,
     (SELECT snapshot_date FROM latest_common) AS latest_common_snapshot
 FROM `${BQ_DATASET}.video_metadata` m
-WHERE m.snapshot_date = (SELECT snapshot_date FROM latest_common)
+WHERE (SELECT snapshot_date FROM latest_common) IS NOT NULL
+    AND m.snapshot_date = (SELECT snapshot_date FROM latest_common)
     AND m.video_type = 'full_length'
     AND DATE_DIFF(CURRENT_DATE("America/Phoenix"), DATE(m.published_at), DAY) >= 14;
 ```
+
+**NULL-guard note:** the `(SELECT snapshot_date FROM latest_common) IS NOT NULL` clauses above are deliberate. If either `video_metadata` or `daily_video_stats` is empty, `LEAST(NULL, X)` returns NULL, which would silently produce `eligible_count = 0` and a 0 denominator for confidence labels (CR-02). The Step 2 data-health check is the primary STOP for empty source tables; these guards are defense-in-depth at the SQL layer.
 
 Substitute `${BQ_DATASET}` with `$BQ_DATASET` (in-memory; do not write the rewritten SQL to disk). Dispatch via `$TRANSPORT` using the Step 1 invocation shape (`printf '%s' "$SQL" | bq --format=json query ...` for `bq_cli`; `execute_sql_readonly` for `bq_mcp`).
 
@@ -118,11 +150,11 @@ Derive the channel-wide confidence label from `eligible_count` per CLAUDE.md § 
 
 | `eligible_count` | label |
 |---|---|
-| `< 5` (i.e., n=4 or fewer) | `low confidence` |
-| `5 to 10` (i.e., n=5, 6, 7, 8, 9, 10) | `moderate confidence` |
-| `>= 10` (i.e., n=10 or more; the table reads `10 or more` per CLAUDE.md) | `standard confidence` |
+| `< 5` (n=1, 2, 3, 4) | `low confidence` |
+| `5 <= n < 10` (n=5, 6, 7, 8, 9) | `moderate confidence` |
+| `>= 10` (n=10 or more) | `standard confidence` |
 
-Boundary clarification (verified A6 in `02-RESEARCH.md`): `n=4` → low, `n=5` → moderate, `n=10` → standard. CLAUDE.md's "5 to 10" range is inclusive of 5; "10 or more" is inclusive of 10. The standard-tier boundary wins at exactly 10.
+The table ranges are non-overlapping. `n=10` falls into the standard-tier row only. This resolves the documented ambiguity in CLAUDE.md § "Small samples get hedged" where "5 to 10" and "10 or more" both name n=10; the standard-tier boundary wins, verified as A6 in `02-RESEARCH.md`. The downstream `confidence_thresholds_correct` audit check (Step 7) validates this exact mapping.
 
 Cache the channel-wide eligible count for the duration of the run; the draft step uses it for any claim drawn from the full eligible set. Sub-population claims (e.g., "only tutorials") MUST scope their own counts and cite the sub-population `n`, not the channel-wide eligible count (per RESEARCH.md Pitfall 2, a tutorial-only claim cites `n=7`, not the channel-wide `n=18`).
 
@@ -242,7 +274,7 @@ Voice checks (REPORT-03, per CLAUDE.md § "Voice"):
 - [ ] First-person plural ("we tried", "what we are seeing") used where it fits, per CLAUDE.md § "Voice" ("Kyle and the audience are figuring this out together"). A draft written entirely in third person or marketing-impersonal voice fails this check even if every other voice item passes.
 
 Prior-report citation checks (D-08 / D-09, per CLAUDE.md § "Report structure"):
-- [ ] No prior-report citations in prose. Banned phrases: "as we said last week", "as noted previously", "the prior report", "this continues the trend we observed", "as noted".
+- [ ] No prior-report citations in prose. Banned phrases: "as we said last week", "as noted previously", "the prior report", "this continues the trend we observed". (The bare phrase "as noted" is intentionally excluded from this list to avoid false-positives on legitimate prose like "as noted in the data"; "as noted previously" above already catches the prior-report case.)
 - [ ] Multi-week claims (if any) stand on their own without requiring the reader to have seen a prior report (D-09 example: "For the third consecutive week, X has held." is allowed).
 
 Provenance check (per CLAUDE.md § "Verification & Evidence"):
@@ -280,7 +312,11 @@ These are the snake-case names to use in `voice_audit.checks_passed`:
 
 ### Publish gate (RESEARCH.md Pitfall 3 mitigation)
 
-When all checks pass, proceed to Step 8 (Assemble the report dict) and from there to Step 9 (Invoke `write-notion-report`). Do NOT advance to the assemble-dict step while any item remains unticked. The Skill MUST NOT be invoked while any item remains unticked.
+When all checks pass, proceed to Step 8 (Assemble the report dict) and from there to Step 9 (Invoke `write-notion-report`). Do NOT advance to the assemble-dict step while any item remains unticked. The Skill SHOULD NOT be invoked while any item remains unticked.
+
+**Enforcement is honor-system, not code.** The gate is markdown instructions to the analyzer agent, not a runtime check. Two consequences:
+- "SHOULD NOT" (not "MUST NOT") accurately describes the strength of enforcement here. A future Python-side validator could promote this to a hard MUST (TODO: surface `voice_audit` presence as a precondition in a wrapper script around Step 9), but until that lands the strongest available enforcement is the agent's compliance with this recipe.
+- **Step 9 precondition (markdown gate, layer 2):** before invoking `write-notion-report` in Step 9, re-verify that `voice_audit.checks_passed` is non-empty in working memory. If it is empty or missing, return to Step 7 and run the audit. This second instruction means the agent must violate TWO explicit recipe steps to skip the audit, not one.
 
 If a check cannot be ticked because the data needed to verify it is unavailable or because the case genuinely falls outside the checklist's scope, record the reason in `summary.json.voice_audit.fixes_applied` with `section: "(audit)"` and `fix: "could not verify <check_identifier>: <reason>"`, and proceed only if the reason is genuinely outside the checklist's scope. Do not use this escape hatch to skip checks that could be verified with a little more work.
 
@@ -299,9 +335,11 @@ Build a strict 8-key dict matching the `write-notion-report` Skill's input contr
 - `open_questions`: `[]` (Phase 2 wires this).
 - `markdown_body`: the full report markdown from Step 6.
 
-Validate before Step 9: if any key is missing, do NOT invoke the Skill. Record `errors: [{"category": "report_dict_invalid", "message": "missing key: <name>", "step": "assemble_dict"}]` and proceed to Step 10 to write summary.json.
+Validate before Step 9: if any key is missing, do NOT invoke the Skill. Record `errors: [{"category": "report_dict_invalid", "message": "missing key: <name>", "step": "assemble_dict"}]`, set `notion_write_ok = false` in working memory (Step 9 will not execute, so the Step 10 schema field needs an explicit default), and proceed to Step 10 to write summary.json.
 
 ## Step 9: Invoke write-notion-report (NOTION-01..06)
+
+**Precondition (markdown gate per Step 7):** before invoking the Skill, confirm `voice_audit.checks_passed` in working memory is non-empty. If it is empty or missing, Step 7 did not run; return to Step 7 and complete the audit before continuing. Do not invoke the Skill on an unaudited draft.
 
 Invoke the `write-notion-report` Skill with the assembled dict. The Skill returns one of:
 
@@ -326,7 +364,7 @@ Write `runs/{run_date}/summary.json` LAST, per the schema in `runs/README.md` (w
 - `video_count_full_length`: row count from Step 3.
 - `queries_run`: list with `{"file": ..., "rows": ..., "ms": ...}` per query that actually executed.
 - `report_path`: `"reports/{run_date}.md"`.
-- `notion_write_ok`: boolean from Step 9.
+- `notion_write_ok`: boolean from Step 9, or `false` if Step 9 was skipped due to a Step 8 dict-validation failure (`report_dict_invalid` error category). The field MUST always be present; an undefined `notion_write_ok` makes the Step 11 operator-message selection (SUCCESS vs. NOTION-FAIL vs. BQ-FAIL) ambiguous.
 - `voice_audit`: `{"checks_passed": [string, ...], "fixes_applied": [{"section": string, "fix": string}, ...]}` from Step 7's self-audit. Both arrays MAY be empty if the audit ran cleanly and nothing needed fixing (improbable on early runs), but the `voice_audit` key itself MUST be present whenever Step 7 ran. A missing `voice_audit` after a successful run indicates Step 7 did not execute.
 - `notion_page_id`, `notion_url`: from the Skill-invoke step's success path; omit or set null on failure.
 - `prior_reports_consulted`: JSON array of `YYYY-MM-DD` strings recording which prior `reports/{date}.md` files were read during the prior-report calibration step (D-10). MAY be empty (`[]`) if fewer than three prior reports exist or none were consulted.

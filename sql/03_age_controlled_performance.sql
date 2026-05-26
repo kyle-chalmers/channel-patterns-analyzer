@@ -15,6 +15,12 @@
 -- tables only; extension to all four analytics tables is deferred (see sql/01
 -- and Phase 2 D-06).
 --
+-- NULL-guard: if either source table is empty, MAX(snapshot_date) returns NULL
+-- and LEAST(NULL, X) returns NULL, so the equality filter never matches and
+-- the query returns zero rows. The IS NOT NULL guard in the `base` CTE below
+-- makes the intent explicit; the recipe's Step 2 data-health check is still
+-- the primary STOP for upstream empty-table conditions.
+--
 -- IMPORTANT: `views_per_day_since_publish_proxy` is a PROXY for the strict
 -- first-30-day normalization required by CLAUDE.md § "Age control is non-negotiable"
 -- — it averages across the entire post-publish window rather than computing
@@ -43,7 +49,8 @@ base AS (
     FROM `youtube_analytics.video_metadata` m
     JOIN `youtube_analytics.daily_video_stats` s
         USING (video_id, snapshot_date)
-    WHERE m.snapshot_date = (SELECT snapshot_date FROM latest_common)
+    WHERE (SELECT snapshot_date FROM latest_common) IS NOT NULL
+        AND m.snapshot_date = (SELECT snapshot_date FROM latest_common)
         AND m.video_type = 'full_length'
         AND DATE_DIFF(CURRENT_DATE("America/Phoenix"), DATE(m.published_at), DAY) >= 14
 )
