@@ -15,7 +15,11 @@ Before drafting any prose for the report, read `CLAUDE.md` (voice, age control, 
 2. Compute the run date in Phoenix time: `run_date = $(TZ=America/Phoenix date +%Y-%m-%d)`. Phoenix is UTC-7 year-round (no DST). Use this `{run_date}` value everywhere downstream.
 3. `mkdir -p runs/{run_date}/queries/ reports/`.
 4. If any required env var is missing, write a minimal `runs/{run_date}/summary.json` with `errors: [{"category": "env_missing", "message": "<NAME> not set", "step": "preflight"}]`, surface the operator message naming the missing var, and STOP. No transport probe, no queries.
-5. Argument handling: `/run-analyzer` takes no arguments. If `$ARGUMENTS` is non-empty, record a `warnings: ["arguments_ignored: <value>"]` entry in `summary.json` and continue. Do not interpret the argument as a flag.
+5. **Validate `BQ_DATASET` against BigQuery identifier rules.** `BQ_DATASET` is string-substituted into backtick-quoted SQL identifiers in Steps 2, 3, and 5 (e.g., `` `${BQ_DATASET}.video_metadata` ``). A value containing a backtick, a comma, or other BigQuery metacharacters could break out of the backtick quoting and either parse-error noisily or query an unintended dataset. Treat `BQ_DATASET` as a potentially-hostile input even though `.env` is operator-controlled (defense in depth).
+   - Required regex: `^[A-Za-z_][A-Za-z0-9_]*$` (BigQuery dataset identifier rules: letter or underscore start, then letters/digits/underscores).
+   - If `BQ_DATASET` fails this check, write `runs/{run_date}/summary.json` with `errors: [{"category": "env_invalid", "message": "BQ_DATASET contains non-identifier characters: <value>", "step": "preflight"}]`, surface the operator message naming the invalid env var, and STOP. No transport probe, no queries.
+   - `BQ_PROJECT` is passed to `bq` via `--project_id="$BQ_PROJECT"` (positional, never string-substituted into SQL) and to the MCP wrapper as a JSON argument, so it does not need the same treatment. Still reject obviously malformed values (empty after trim, contains whitespace) as a sanity check.
+6. Argument handling: `/run-analyzer` takes no arguments. If `$ARGUMENTS` is non-empty, record a `warnings: ["arguments_ignored: <value>"]` entry in `summary.json` and continue. Do not interpret the argument as a flag.
 
 ## Step 1: Probe transports
 
