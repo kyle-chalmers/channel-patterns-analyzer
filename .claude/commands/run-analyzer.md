@@ -335,7 +335,7 @@ Build a strict 8-key dict matching the `write-notion-report` Skill's input contr
 - `open_questions`: `[]` (Phase 2 wires this).
 - `markdown_body`: the full report markdown from Step 6.
 
-Validate before Step 9: if any key is missing, do NOT invoke the Skill. Record `errors: [{"category": "report_dict_invalid", "message": "missing key: <name>", "step": "assemble_dict"}]` and proceed to Step 10 to write summary.json.
+Validate before Step 9: if any key is missing, do NOT invoke the Skill. Record `errors: [{"category": "report_dict_invalid", "message": "missing key: <name>", "step": "assemble_dict"}]`, set `notion_write_ok = false` in working memory (Step 9 will not execute, so the Step 10 schema field needs an explicit default), and proceed to Step 10 to write summary.json.
 
 ## Step 9: Invoke write-notion-report (NOTION-01..06)
 
@@ -364,7 +364,7 @@ Write `runs/{run_date}/summary.json` LAST, per the schema in `runs/README.md` (w
 - `video_count_full_length`: row count from Step 3.
 - `queries_run`: list with `{"file": ..., "rows": ..., "ms": ...}` per query that actually executed.
 - `report_path`: `"reports/{run_date}.md"`.
-- `notion_write_ok`: boolean from Step 9.
+- `notion_write_ok`: boolean from Step 9, or `false` if Step 9 was skipped due to a Step 8 dict-validation failure (`report_dict_invalid` error category). The field MUST always be present; an undefined `notion_write_ok` makes the Step 11 operator-message selection (SUCCESS vs. NOTION-FAIL vs. BQ-FAIL) ambiguous.
 - `voice_audit`: `{"checks_passed": [string, ...], "fixes_applied": [{"section": string, "fix": string}, ...]}` from Step 7's self-audit. Both arrays MAY be empty if the audit ran cleanly and nothing needed fixing (improbable on early runs), but the `voice_audit` key itself MUST be present whenever Step 7 ran. A missing `voice_audit` after a successful run indicates Step 7 did not execute.
 - `notion_page_id`, `notion_url`: from the Skill-invoke step's success path; omit or set null on failure.
 - `prior_reports_consulted`: JSON array of `YYYY-MM-DD` strings recording which prior `reports/{date}.md` files were read during the prior-report calibration step (D-10). MAY be empty (`[]`) if fewer than three prior reports exist or none were consulted.
