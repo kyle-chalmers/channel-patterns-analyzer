@@ -25,8 +25,21 @@ Before drafting any prose for the report, read `CLAUDE.md` (voice, age control, 
 
 **Operator override (checked before auto-detection):** if `BQ_TRANSPORT` is set to `bq_cli` or `bq_mcp`, use that value verbatim as `TRANSPORT` and skip the auto-detect probe below. If `BQ_TRANSPORT` is set to any other value, record `warnings: ["bq_transport_invalid: <value>; falling back to auto-detect"]` in `summary.json` (held in working memory until Step 10) and continue with auto-detection. This override is the smoke-test hook documented at the bottom of this step; without it the `bq_mcp` branch is unreachable on Kyle's laptop because `bq` is always on PATH and the probe below would always pick `bq_cli`.
 
-Otherwise, probe the session for an available BigQuery transport, in this order:
+Otherwise, probe the session for an available transport, in this order:
 
+- If `DATA_SOURCE=csv` (read from the operator's `.env` in Step 0), set `TRANSPORT=csv` and SKIP the BigQuery probe. Before proceeding to Step 2, regenerate `sample_data/*.csv` for today's Phoenix snapshot by running:
+
+    ```bash
+    python scripts/csv_fallback_loader.py
+    ```
+
+    The loader anchors on Phoenix tz by default after Plan 03-01. The fixtures are stable-seeded (`Random(42)`, `Random(43)`, `Random(44)`) so regenerating is cheap and deterministic. If the operator wants to exercise the stale-data branch, they pre-run the loader with a pinned snapshot themselves before invoking the recipe:
+
+    ```bash
+    python scripts/csv_fallback_loader.py --snapshot-date YYYY-MM-DD
+    ```
+
+    The recipe does not auto-stale. The CSV branch is a short-circuit, not a parallel probe: when `DATA_SOURCE=csv` is set, the recipe does NOT then try `command -v bq` (it would falsely succeed on a developer machine that has `bq` installed for other projects and confuse the `summary.json.transport` audit trail).
 - Try `command -v bq` via Bash. If `bq` is on PATH, set `TRANSPORT=bq_cli`.
 - Else check whether `mcp__claude_ai_Google_Cloud_BigQuery__execute_sql_readonly` is loaded in the session. The agent can introspect the list of available tools at session start (the same list surfaced by the runtime's tool-discovery API); if the tool name appears in that list, the transport is available and `TRANSPORT=bq_mcp`. There is no way to test this from a shell; it requires the agent's own session-tool introspection.
 - Else write `runs/{run_date}/summary.json` with `errors: [{"category": "no_bigquery_transport", "message": "neither bq CLI nor BigQuery MCP available", "step": "transport_probe"}]` and STOP.
@@ -36,6 +49,7 @@ Invocation shapes (use verbatim):
 - `bq_cli`: `printf '%s' "$SQL" | bq --format=json query --use_legacy_sql=false --project_id="$BQ_PROJECT"`. SQL goes in via **stdin pipe**, never as a positional argument. The `--format=json` flag is GLOBAL and goes BEFORE the `query` subcommand. Capture stderr separately because `bq` writes auth-refresh messages to stderr. Row-count control is handled at the SQL level (use `LIMIT` inside the SQL file if a cap is needed); do NOT pass `--max_rows` to `bq query`. That flag is not valid for the `query` subcommand and crashes bq's argument parser with a Python `RecursionError`. The Phase 1 default 100-row cap is the only fallback; Plan 02-01 removed `LIMIT 20` from `sql/02` and `sql/03`, so very large result sets in those queries would be capped at 100 rows by bq's default. The dataset is small enough (~23 full-length videos) that this is not a practical concern; if it ever becomes one, raise the cap via `--n` (which the `query` subcommand does accept) or push a `LIMIT` into the SQL.
 - The stdin-pipe form is also required because every `sql/` file in this repo uses Unicode box-drawing characters (`─` U+2500) in its header comment. Passing those characters as a positional argument trips the same `RecursionError` in bq's flag-suggester (the parser treats the leading dash as flag-like). Piping via stdin avoids that path entirely. The `bq_mcp` branch is unaffected (SQL crosses the wire as a JSON string argument).
 - `bq_mcp`: invoke `mcp__claude_ai_Google_Cloud_BigQuery__execute_sql_readonly` with arguments `{"projectId": "<BQ_PROJECT value>", "query": "<SQL string>"}`. Note: `projectId` is camelCase and REQUIRED (the wrapper does NOT fall back to gcloud config). The response is `{"jobComplete": ..., "rows": [{"f": [{"v": ...}, ...]}, ...], "schema": {"fields": [{"name": ..., "type": ...}, ...]}, ...}`. Rows come back in positional shape: zip each row's `f` array against `schema.fields[].name` to recover column names. Numeric metadata (`totalBytesBilled`, `totalBytesProcessed`) is returned as JSON strings; coerce before any arithmetic.
+- `csv`: `python scripts/csv_query.py <query_name>` where `<query_name>` is one of `data_health`, `top_full_length_videos`, `eligible_video_count`. The helper reads `sample_data/*.csv`, applies the same filters/joins as the corresponding `sql/*.sql` file (or, for `eligible_video_count`, the inline SQL in Step 5), and emits a JSON array to stdout matching `bq --format=json query`'s shape (top-level array, all values as JSON strings, column names matching the SQL aliases). No `--project_id` or dataset arg; CSV mode is project-agnostic. Capture stdout to the same `runs/{run_date}/queries/<query_name>.json` path the BigQuery branches write to. No `.stderr` sidecar (Python writes tracebacks to stderr only on failure; the success path is clean stdout). On non-zero exit, capture stderr inline into the error block per the failure-routing rules at the bottom of each step.
 
 **Transport smoke-test note (first-time operators):** Run the recipe once with `BQ_TRANSPORT=bq_cli` and once with `BQ_TRANSPORT=bq_mcp` to confirm both paths produce identical row counts for `data_health` and `top_full_length_videos`. Phase 1 only exercised `bq_cli` live; the MCP branch is documented but unverified end-to-end. A divergence between the two transports on the same snapshot is a transport bug, not a data bug.
 
@@ -43,7 +57,7 @@ Invocation shapes (use verbatim):
 
 Read `sql/04_data_health_check.sql`. Substitute every literal `youtube_analytics` in the file contents with the value of `$BQ_DATASET` (in-memory string replace; do not edit the file on disk). The file already uses `CURRENT_DATE("America/Phoenix")` (double-quoted, the canonical form Plan 02-01 standardized on across `sql/02..04`), so no timezone substitution is needed.
 
-Dispatch the rewritten SQL to `$TRANSPORT`. Capture stdout to `runs/{run_date}/queries/data_health.json`. For `bq_cli`, capture stderr to `runs/{run_date}/queries/data_health.stderr` so the JSON capture stays clean. For `bq_mcp`, errors come back in the tool response itself, not stderr.
+Dispatch the rewritten SQL to `$TRANSPORT`. Capture stdout to `runs/{run_date}/queries/data_health.json`. For `bq_cli`, capture stderr to `runs/{run_date}/queries/data_health.stderr` so the JSON capture stays clean. For `bq_mcp`, errors come back in the tool response itself, not stderr. When `$TRANSPORT=csv`, the dispatch is `python scripts/csv_query.py data_health` (the in-memory SQL substitution from the prior paragraph is a no-op; the CSV helper does not consume SQL). Output captured to the same `runs/{run_date}/queries/data_health.json` path.
 
 Parse the 4-row result. Each row has `table_name`, `latest_snapshot`, `days_stale`. Build:
 
@@ -71,7 +85,7 @@ Failure routing:
 
 Read `sql/02_top_full_length_videos.sql`. Substitute `youtube_analytics` -> `$BQ_DATASET` the same way. This query joins `video_metadata` and `daily_video_stats` on `(video_id, snapshot_date)` per `BUSINESS_RULES.md § "Table grain and join keys (data contract)"` (never on `video_id` alone, which would Cartesian-explode across snapshots).
 
-Dispatch to `$TRANSPORT`. Capture stdout to `runs/{run_date}/queries/top_full_length_videos.json` (and stderr to the matching `.stderr` file for `bq_cli`).
+Dispatch to `$TRANSPORT`. Capture stdout to `runs/{run_date}/queries/top_full_length_videos.json` (and stderr to the matching `.stderr` file for `bq_cli`). When `$TRANSPORT=csv`, the dispatch is `python scripts/csv_query.py top_full_length_videos`. Same output path.
 
 If `daily_video_stats` appeared in `stale_tables` from Step 2, record the staleness flag for Step 6 so the "What is working" section can disclaim it (HEALTH-03). If `daily_video_analytics` is stale, that affects the empty-by-design Phase 1 sections (which already say "not analyzed this run"); note it but do not block.
 
@@ -79,7 +93,7 @@ If the query returns zero rows, this is a BQ-03 failure: record `errors: [{"cate
 
 ## Step 4: Read prior reports for calibration
 
-This step implements ANALYSIS-05 and D-08 from `.planning/phases/02-honest-analyst-depth/02-CONTEXT.md`. Run AFTER Step 3 (top-videos pull) and BEFORE the draft step.
+This step implements ANALYSIS-05 (read prior reports for confidence calibration) and the prior-report citation rule (do not cite prior reports in prose; banned phrases listed in Step 6 below). Run AFTER Step 3 (top-videos pull) and BEFORE the draft step.
 
 1. Select the **3 most recent distinct prior dates** from `reports/`, excluding today's date (today's same-day retry, if any, belongs to "this run", not the calibration archive). Lexicographic `sort | tail -n 3` over filenames is wrong here: same-day retries (`YYYY-MM-DD-N.md`) sort after the original and would let a single prior date monopolize all three slots. Pick distinct dates first, then resolve each date to its canonical file:
    ```bash
@@ -147,7 +161,7 @@ WHERE (SELECT snapshot_date FROM latest_common) IS NOT NULL
 
 **NULL-guard note:** the `(SELECT snapshot_date FROM latest_common) IS NOT NULL` clauses above are deliberate. If either `video_metadata` or `daily_video_stats` is empty, `LEAST(NULL, X)` returns NULL, which would silently produce `eligible_count = 0` and a 0 denominator for confidence labels (CR-02). The Step 2 data-health check is the primary STOP for empty source tables; these guards are defense-in-depth at the SQL layer.
 
-Substitute `${BQ_DATASET}` with `$BQ_DATASET` (in-memory; do not write the rewritten SQL to disk). Dispatch via `$TRANSPORT` using the Step 1 invocation shape (`printf '%s' "$SQL" | bq --format=json query ...` for `bq_cli`; `execute_sql_readonly` for `bq_mcp`).
+Substitute `${BQ_DATASET}` with `$BQ_DATASET` (in-memory; do not write the rewritten SQL to disk). Dispatch via `$TRANSPORT` using the Step 1 invocation shape (`printf '%s' "$SQL" | bq --format=json query ...` for `bq_cli`; `execute_sql_readonly` for `bq_mcp`). When `$TRANSPORT=csv`, the dispatch is `python scripts/csv_query.py eligible_video_count`. Same output path. The inline SQL composed earlier in this step is informative for the BigQuery branch only; the CSV helper has the same logic hand-coded.
 
 Persist the raw query result to `runs/{run_date}/queries/eligible_video_count.json` (BQ-02 convention) so the audit trail captures the denominator behind every confidence label this run.
 
@@ -167,7 +181,7 @@ Output (held in working memory for the draft step): `{eligible_count: N, total_f
 
 ## Step 6: Draft the report (PERSIST-01)
 
-Compose the markdown report per `CLAUDE.md § "Report structure"`. This step implements REPORT-01 (six-section structure), REPORT-02 (numbers + age + confidence in plain sight), and the D-07 inline-parenthetical format (per `.planning/phases/02-honest-analyst-depth/02-CONTEXT.md`).
+Compose the markdown report per `CLAUDE.md § "Report structure"`. This step implements REPORT-01 (six-section structure), REPORT-02 (numbers + age + confidence in plain sight), and the D-07 inline-parenthetical format.
 
 ### 1. Rules to apply before writing prose
 
@@ -178,7 +192,8 @@ Before drafting any sentence, load the following CLAUDE.md sections and apply ea
 - Apply `CLAUDE.md § "Brutal honesty about underperformance"`. Wins and misses get equal weight; do not bury weak results in caveats; name videos and numbers plainly. A recent bet that did not land gets named as not landing.
 - Apply `CLAUDE.md § "Never claim what the data does not support"`. Distinguish observed (in the query result), inferred (a reasonable read), and assumed (a guess being flagged). If data did not move enough to be meaningful at this sample size, say so. If a query returned no rows or suspicious rows, report that instead of analyzing around it.
 - Apply `CLAUDE.md § "Voice"`. First-person plural where it fits ("we tried", "what we are seeing"). No em dash (U+2014). No en dash (U+2013) as punctuation. No banned vocabulary from the project CLAUDE.md list (delve, leverage, robust, seamless, navigate, underscore, showcase, tapestry, realm, multifaceted, transformative, testament to). No formulaic openers or closers ("Great news!", "Overall,", "In conclusion,"). No contrastive reframes ("It's not X, it's Y"; "Not just X but Y"). Vary sentence length.
-- Apply D-08 from `.planning/phases/02-honest-analyst-depth/02-CONTEXT.md`. The prior reports read in Step 4 are calibration memory, not reader memory. Do not cite them in prose. Cross-week framing per D-09 is allowed only when self-contained (e.g., `"For the third consecutive week, X has held."`). Banned phrases: `"as we said last week"`, `"as noted previously"`, `"the prior report"`, `"this continues the trend we observed"`.
+- Apply the prior-report citation rule. The prior reports read in Step 4 are calibration memory, not reader memory. Do not cite them in prose. Cross-week framing per D-09 is allowed only when self-contained (e.g., `"For the third consecutive week, X has held."`). Banned phrases: `"as we said last week"`, `"as noted previously"`, `"the prior report"`, `"this continues the trend we observed"`.
+- **CSV-mode annotation.** When `$TRANSPORT=csv`, the report's first line (above the `## Data Health` heading) reads exactly `data source: csv (sample fixtures, not live)`. This is the only structural difference between a CSV-mode report and a BigQuery-mode report. Do not add a similar line for BigQuery mode (the absence of this line signals live data).
 
 ### 2. Confidence label format (per D-07)
 
@@ -247,9 +262,9 @@ Write the assembled markdown to `reports/{run_date}.md`. Also copy the same cont
 
 ## Step 7: Self-audit (run AFTER draft is assembled, BEFORE invoking write-notion-report)
 
-This step implements D-01 Layer 2 from `.planning/phases/02-honest-analyst-depth/02-CONTEXT.md`: Step 6 made the rules explicit at draft time (Layer 1); this step verifies the rules were actually followed. Without it, the draft step still depends on the analyzer remembering to apply the voice rules; with it, every run gates publish on a copy-into-response checklist and the audit trail makes silent voice violations visible after the fact. Run AFTER Step 6 (draft assembled, markdown written to `reports/{run_date}.md`) and BEFORE Step 8 (assemble the report dict for `write-notion-report`).
+This step is the self-audit gate (Layer 2 of the voice-and-structure verification): Step 6 made the rules explicit at draft time (Layer 1); this step verifies the rules were actually followed. Without it, the draft step still depends on the analyzer remembering to apply the voice rules; with it, every run gates publish on a copy-into-response checklist and the audit trail makes silent voice violations visible after the fact. Run AFTER Step 6 (draft assembled, markdown written to `reports/{run_date}.md`) and BEFORE Step 8 (assemble the report dict for `write-notion-report`).
 
-The pattern is the copy-into-response checklist from Anthropic's Skill best practices (cited in `.planning/phases/02-honest-analyst-depth/02-RESEARCH.md` § "Common Pitfalls" 3): literally copy the checkbox list below into the working response and tick each item as the draft is walked. The checklist mirrors `CLAUDE.md` and `02-CONTEXT.md` rules 1:1, referenced by section title so future `CLAUDE.md` edits flow through by re-derivation, not parallel maintenance.
+The pattern is the copy-into-response checklist from Anthropic's Skill best practices: literally copy the checkbox list below into the working response and tick each item as the draft is walked. The checklist mirrors `CLAUDE.md` rules 1:1, referenced by section title so future `CLAUDE.md` edits flow through by re-derivation, not parallel maintenance.
 
 ### Checklist (copy into the response and tick each item)
 
