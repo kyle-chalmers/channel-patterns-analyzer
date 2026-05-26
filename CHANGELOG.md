@@ -6,6 +6,15 @@ One entry per change, dated. Brief is fine; the goal is auditability, not narrat
 
 ---
 
+## 2026-05-25, Phase 3 Plan 03-01
+
+Phase 3 Plan 03-01 fixes two date-handling bugs in the CSV fixture generator and corrects cross-reference rot in the Python dependency manifest. No analyzer behavior changes; CSV mode is not yet wired into the recipe (that lands in Plan 03-03).
+
+- `scripts/csv_fallback_loader.py`: before, `main()` called `date.today()` (operator's system-local date) and `generate_video_metadata` wrote `published_at` by suffixing `"Z"` onto a naive datetime (a lie about the source timezone). After, the snapshot defaults to `datetime.now(ZoneInfo("America/Phoenix")).date()` and `published_at` carries a real `-07:00` offset built from a Phoenix-tz-aware `datetime`. New `--snapshot-date YYYY-MM-DD` arg (argparse, `type=date.fromisoformat`) lets the loader generate fixtures pinned to any date for stale-data path testing. Stdlib-only (`zoneinfo`, `argparse`); no new third-party imports per PROJECT.md, section "Constraints". Random seeds (42 / 43 / 44), generator function signatures, and the `_write` helper are unchanged so deterministic output across runs is preserved. Impact on recent reports: zero, CSV mode is not yet wired into the recipe (lands in Plan 03-03). Forward-looking: CSV-mode runs will now report honest timezone metadata.
+- `requirements.txt`: before, referenced `requirements-csv.txt` and `requirements-bigquery.txt`, neither of which has ever existed in this repo. After, a short comment block stating the analyzer uses stdlib only and citing the constraint in `.planning/PROJECT.md`, section "Constraints". File is comment-only by intent; no `pip install -r requirements.txt` step exists in the operator workflow. Impact on recent reports: zero.
+
+---
+
 ## 2026-05-25
 
 Phase 2 Plan 02-01 SQL correctness fixes (D-05). All three files pass `bq` dry-run validation against the live `youtube_analytics` dataset.

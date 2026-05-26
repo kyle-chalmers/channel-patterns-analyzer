@@ -1,18 +1,12 @@
-# Channel Patterns Analyzer — Python dependencies
+# Channel Patterns Analyzer Python dependencies.
 #
-# The main analyzer runs inside Claude Code with the bq CLI — no Python deps required.
-# Python deps below are ONLY for following along outside Claude Code:
+# The analyzer itself uses only Python stdlib (csv, json, argparse, datetime,
+# zoneinfo, pathlib, random). There is no `pip install -r requirements.txt`
+# step in the operator workflow.
 #
-#   - Use `requirements-csv.txt` (this file as-is) for the CSV fallback path
-#   - Use `requirements-bigquery.txt` (uncomment the BigQuery block) for direct BQ access
+# External CLI tooling lives outside this manifest:
+#   - `bq` / `gcloud` (Google Cloud SDK). See README for install.
+#   - `git`, `jq`. Standard Unix utilities.
 #
-# Most viewers can ignore this file entirely.
-
-# ─── CSV fallback path (always available) ─────────────────────────
-# scripts/csv_fallback_loader.py uses only the Python stdlib (csv, datetime,
-# pathlib, random). No third-party deps required.
-
-# ─── Optional: direct BigQuery access from Python ─────────────────
-# Uncomment if you want to call the analyzer outside Claude Code via Python.
-# google-cloud-bigquery>=3.20.0
-# google-auth>=2.30.0
+# If a future change adds a real Python dependency, list it below AND update
+# CHANGELOG.md naming the justification (PROJECT.md, section "Constraints").
