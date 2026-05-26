@@ -1,10 +1,11 @@
 ---
 phase: 02-honest-analyst-depth
 verified: 2026-05-25T23:55:00-07:00
-status: human_needed
-score: 14/14 recipe-level must-haves verified (live-run demonstration of recipe behavior on a published report still pending)
-overrides_applied: 0
-re_verification: null
+status: passed
+score: 14/14 recipe-level must-haves verified; operator confirmed live-run end-to-end (Notion page https://www.notion.so/kclabs/Weekly-report-2026-05-25-36bccd0549458159a49dd99439757982)
+overrides_applied: 1
+re_verification: 2026-05-26T00:30:00-07:00
+operator_override_note: "Operator (Kyle) confirmed at 2026-05-26T00:30 that a Phase-2-era /run-analyzer live run produced the cited Notion page. Phase 2's recipe changes are markdown-instruction edits that cannot be tested in isolation outside a live run; the cited page is the live evidence. The 3 human_needed items in 02-HUMAN-UAT.md are resolved with this evidence. The SIMULATE_STALE path (item 2) and Notion-render-of-parentheticals (item 3) remain unexercised; not blocking, tracked as Phase-3 / hardening targets per known_quality_issues."
 deferred:
   - truth: "Phase 2 published report demonstrates inline confidence labels, six-section structure with empty-section / stale-disclaimer machinery, and self-audit voice_audit block end-to-end"
     addressed_in: "First Phase 2 /run-analyzer execution (operator-triggered; not a Phase 3 scope item, but explicitly out of Phase 2's plan-as-written scope per 02-02-PLAN.md and 02-03-PLAN.md output specs)"

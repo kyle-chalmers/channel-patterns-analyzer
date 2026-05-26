@@ -26,17 +26,17 @@ Requirements for the first end-to-end weekly run. Each maps to a roadmap phase.
 
 ### Analysis Rules
 
-- [ ] **ANALYSIS-01**: Videos with `days_since_published < 14` are excluded from "top performers" and pattern claims; flagged as low-confidence if mentioned at all
-- [ ] **ANALYSIS-02**: Cross-age comparisons normalize to a comparable window (first-30-day views when possible; views-per-day-since-publish as a labeled proxy otherwise)
-- [ ] **ANALYSIS-03**: Live video count queried each run from `video_metadata` (latest snapshot); confidence label (low / moderate / standard) appended next to every pattern claim per the thresholds in `CLAUDE.md`
-- [ ] **ANALYSIS-04**: Trending claims require at least 14 days of data per video in the comparison set
-- [ ] **ANALYSIS-05**: Before drafting, the analyzer reads the three most recent `reports/{date}.md` files to calibrate confidence (upgrade patterns with more data) and avoid restating findings verbatim
+- [x] **ANALYSIS-01**: Videos with `days_since_published < 14` are excluded from "top performers" and pattern claims; flagged as low-confidence if mentioned at all
+- [x] **ANALYSIS-02**: Cross-age comparisons normalize to a comparable window (first-30-day views when possible; views-per-day-since-publish as a labeled proxy otherwise)
+- [x] **ANALYSIS-03**: Live video count queried each run from `video_metadata` (latest snapshot); confidence label (low / moderate / standard) appended next to every pattern claim per the thresholds in `CLAUDE.md`
+- [x] **ANALYSIS-04**: Trending claims require at least 14 days of data per video in the comparison set
+- [x] **ANALYSIS-05**: Before drafting, the analyzer reads the three most recent `reports/{date}.md` files to calibrate confidence (upgrade patterns with more data) and avoid restating findings verbatim
 
 ### Report Structure
 
-- [ ] **REPORT-01**: Each report has the six required sections in order: Data Health, Headline, What is working, What is not working, Patterns worth watching, Open questions
-- [ ] **REPORT-02**: Findings include numbers, age context, and confidence labels in plain sight (not footnotes)
-- [ ] **REPORT-03**: Voice rules enforced — no em dashes, no banned vocabulary list ("leverage", "robust", "delve", etc.), no formulaic openers/closers; written in first-person plural where it fits
+- [x] **REPORT-01**: Each report has the six required sections in order: Data Health, Headline, What is working, What is not working, Patterns worth watching, Open questions
+- [x] **REPORT-02**: Findings include numbers, age context, and confidence labels in plain sight (not footnotes)
+- [x] **REPORT-03**: Voice rules enforced — no em dashes, no banned vocabulary list ("leverage", "robust", "delve", etc.), no formulaic openers/closers; written in first-person plural where it fits
 
 ### Notion Writer Skill
 
@@ -115,14 +115,14 @@ Each v1 requirement maps to exactly one phase.
 | BQ-03 | Phase 1 | Pending |
 | CSV-01 | Phase 3 | Pending |
 | CSV-02 | Phase 3 | Pending |
-| ANALYSIS-01 | Phase 2 | Pending |
-| ANALYSIS-02 | Phase 2 | Pending |
-| ANALYSIS-03 | Phase 2 | Pending |
-| ANALYSIS-04 | Phase 2 | Pending |
-| ANALYSIS-05 | Phase 2 | Pending |
-| REPORT-01 | Phase 2 | Pending |
-| REPORT-02 | Phase 2 | Pending |
-| REPORT-03 | Phase 2 | Pending |
+| ANALYSIS-01 | Phase 2 | Complete |
+| ANALYSIS-02 | Phase 2 | Complete |
+| ANALYSIS-03 | Phase 2 | Complete |
+| ANALYSIS-04 | Phase 2 | Complete |
+| ANALYSIS-05 | Phase 2 | Complete |
+| REPORT-01 | Phase 2 | Complete |
+| REPORT-02 | Phase 2 | Complete |
+| REPORT-03 | Phase 2 | Complete |
 | NOTION-01 | Phase 1 | Pending |
 | NOTION-02 | Phase 1 | Pending |
 | NOTION-03 | Phase 1 | Pending |
