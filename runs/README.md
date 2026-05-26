@@ -7,12 +7,13 @@ runs/
   2026-05-24/
     summary.json           ← run metadata (see schema below)
     queries/               ← raw JSON dump of each SQL result
-      01_data_health.json
-      02_top_videos.json
-      03_age_controlled.json
-      04_traffic_sources.json
+      data_health.json              ← from sql/04_data_health_check.sql
+      top_full_length_videos.json   ← from sql/02_top_full_length_videos.sql
+      eligible_video_count.json     ← from the recipe-inline eligible-count SQL (Step 5)
     report.md              ← mirror of reports/2026-05-24.md, kept here for a self-contained folder
 ```
+
+The query JSON filenames are the recipe's choice (they describe the result, not the SQL file); the `queries_run[].file` field in `summary.json` points at the SQL source file under `sql/`. Phase 1 runs the three queries above. Phase 2 and later add new query outputs in this same folder; each new output is documented as part of the change that introduces it.
 
 ## Why this exists
 
@@ -47,8 +48,9 @@ The dataset is small enough (~23 videos across 4 tables) that committing raw que
   "stale_tables": ["daily_video_analytics (2 days)"],
   "video_count_full_length": 24,
   "queries_run": [
-    {"file": "01_data_health.sql", "rows": 4, "ms": 412},
-    {"file": "02_top_videos.sql", "rows": 24, "ms": 387}
+    {"file": "sql/04_data_health_check.sql", "rows": 4, "ms": 412},
+    {"file": "sql/02_top_full_length_videos.sql", "rows": 24, "ms": 387},
+    {"file": "eligible_video_count (recipe-inline)", "rows": 1, "ms": 198}
   ],
   "report_path": "reports/2026-05-24.md",
   "notion_write_ok": true,
