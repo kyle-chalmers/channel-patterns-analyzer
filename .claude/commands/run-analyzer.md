@@ -35,7 +35,7 @@ Invocation shapes (use verbatim):
 
 ## Step 2: Data health (HEALTH-01, HEALTH-02, HEALTH-03)
 
-Read `sql/04_data_health_check.sql`. Substitute every literal `youtube_analytics` in the file contents with the value of `$BQ_DATASET` (in-memory string replace; do not edit the file on disk). The file already uses `CURRENT_DATE('America/Phoenix')` per the Phase 1 scaffold fix, so no timezone substitution is needed.
+Read `sql/04_data_health_check.sql`. Substitute every literal `youtube_analytics` in the file contents with the value of `$BQ_DATASET` (in-memory string replace; do not edit the file on disk). The file already uses `CURRENT_DATE("America/Phoenix")` (double-quoted, the canonical form Plan 02-01 standardized on across `sql/02..04`), so no timezone substitution is needed.
 
 Dispatch the rewritten SQL to `$TRANSPORT`. Capture stdout to `runs/{run_date}/queries/data_health.json`. For `bq_cli`, capture stderr to `runs/{run_date}/queries/data_health.stderr` so the JSON capture stays clean. For `bq_mcp`, errors come back in the tool response itself, not stderr.
 
