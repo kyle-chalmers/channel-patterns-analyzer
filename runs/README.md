@@ -55,7 +55,7 @@ The dataset is small enough (~23 videos across 4 tables) that committing raw que
   "report_path": "reports/2026-05-24.md",
   "notion_write_ok": true,
   "notion_page_id": "<page-id>",
-  "notion_url": "https://www.notion.so/Weekly-report-2026-05-24-<shortid>",
+  "notion_url": "<url returned by the write-notion-report Skill on success; shape is typically https://www.notion.so/<workspace-slug>/Weekly-report-2026-05-24-<32-char-page-id-no-dashes>>",
   "prior_reports_consulted": ["2026-05-18", "2026-05-11", "2026-05-04"],
   "voice_audit": {
     "checks_passed": [
