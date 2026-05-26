@@ -6,7 +6,7 @@ How to extend the analyzer without breaking the contract it has with the operato
 
 1. Add the file to `sql/` with a numeric prefix (`05_*.sql`, `06_*.sql`) so the run order stays obvious.
 2. Reference the dataset by `BQ_DATASET` (default `youtube_analytics`) — don't hardcode a project.
-3. If the query touches a table whose grain or join keys aren't already covered in `BUSINESS_RULES.md` §6, extend §6 first and reference it from the query's comment header.
+3. If the query touches a table whose grain or join keys aren't already covered in `BUSINESS_RULES.md` § "Table grain and join keys (data contract)", extend that section first and reference it from the query's comment header.
 4. Make sure the query, when its result is dumped to JSON, stays small enough to commit (~hundreds of KB is fine, multi-MB is not). The dataset is small for now — revisit if a query ever returns thousands of rows.
 5. Add the file to the list the analyzer runs each week (in `CLAUDE.md` or wherever the analyzer's query manifest lives).
 6. Add a `CHANGELOG.md` entry.
@@ -18,7 +18,7 @@ How to extend the analyzer without breaking the contract it has with the operato
 1. Make the smallest possible change. If you're tempted to rewrite a section, write the new version next to the old and migrate deliberately.
 2. State the change in plain language in `CHANGELOG.md`, including **before** and **after** values for any threshold you moved.
 3. If the change would have changed a recent report's numbers or framing, say so in the changelog entry. Don't silently retcon.
-4. Do **not** change the fiscal-year anchor (§1) without discussing — every prior report assumed July. A mid-stream change makes the archive incoherent.
+4. Do **not** change the fiscal-year anchor (`BUSINESS_RULES.md` § "Fiscal year start") without discussing. Every prior report assumed July; a mid-stream change makes the archive incoherent.
 
 ## Retiring a pattern
 

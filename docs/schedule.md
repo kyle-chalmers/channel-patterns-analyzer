@@ -47,12 +47,12 @@ Run once when first wiring the routine. After that, edits use the same form (see
 
 Click Run now on the routine's detail page. Verify within about 3 minutes:
 
-- [ ] (a) A new child page appears under the channel-patterns parent in Notion within 60 seconds, titled `Weekly report, {today's Phoenix date}`. If not, see `docs/runbook.md` § "Notion write failed".
-- [ ] (b) The Notion page renders all six sections: Data Health, Headline, What is working, What is not working, Patterns worth watching, Open questions. Spot-check one finding for a `(label, n=N)` parenthetical; Notion should render it as plain text (not stripped, not linkified).
-- [ ] (c) The Anthropic UI shows the routine run as completed (green status). Note: green means the session exited without an infrastructure error, not that the analysis succeeded. Open the run transcript and confirm no `category: ...` error lines appear.
-- [ ] (d) After the cloud routine's PR merges (or you `git pull` the `claude/...` branch), `runs/{date}/summary.json` exists with `notion_write_ok: true` and an empty `errors: []` array.
+- [ ] (a) A new child page appears under the channel-patterns parent in Notion within 60 seconds, titled `Weekly report, {today's Phoenix date}`. If not, the failure is most likely Notion connector auth (`docs/runbook.md` § "Notion connector not authorized"), BigQuery connector auth (`docs/runbook.md` § "BigQuery MCP connector not authorized"), or the broader Notion write surface (`docs/runbook.md` § "Notion write failed").
+- [ ] (b) The Notion page renders all six sections: Data Health, Headline, What is working, What is not working, Patterns worth watching, Open questions. Spot-check one finding for a `(label, n=N)` parenthetical; Notion should render it as plain text (not stripped, not linkified). If the page is missing sections or a required key, the recipe stopped at Step 8; see `docs/runbook.md` § "Skill input dict missing a required key".
+- [ ] (c) The Anthropic UI shows the routine run as completed (green status). Note: green means the session exited without an infrastructure error, not that the analysis succeeded. Open the run transcript and confirm no `category: ...` error lines appear. If the run hung or did not complete, see `docs/runbook.md` § "Routine run timed out or hung". If the UI shows an infrastructure error before the recipe's first step executed, see `docs/runbook.md` § "Anthropic UI shows error before recipe runs".
+- [ ] (d) After the cloud routine's PR merges (or you `git pull` the `claude/...` branch), `runs/{date}/summary.json` exists with `notion_write_ok: true` and an empty `errors: []` array. If `errors[]` is non-empty, each entry's `category` field names the matching `docs/runbook.md` section by convention (e.g. `env_missing` → "Routine environment variable missing in cloud config", `no_bigquery_transport` → "No BigQuery transport available", `report_dict_invalid` → "Skill input dict missing a required key").
 
-If any check fails, the linked runbook section names the recovery. New failure modes (BigQuery connector not authorized, Notion connector not authorized, routine env var missing, routine timed out, Anthropic UI shows error before recipe runs) get their own runbook sections in Plan 03-04.
+If any check fails, the linked runbook section names the recovery. If a check fails in a way no section covers, add a new runbook section as part of the fix (per `.claude/commands/run-analyzer.md` Step 11 closing instruction; ERR-03).
 
 ## Re-running manually
 
