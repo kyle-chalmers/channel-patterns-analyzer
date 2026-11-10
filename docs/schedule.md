@@ -1,76 +1,67 @@
 # Schedule
 
-The analyzer runs weekly via a Claude Code `/schedule` routine, Mondays at 9am Phoenix time by default. This doc describes how the routine is wired, why local-vs-cloud matters, and how to re-run manually.
+The analyzer supports weekly Claude Code routines. The previous setup targeted
+Monday at 9 a.m. America/Phoenix. The archive configuration below is a setup
+procedure. Its GitHub authentication and retention path still need verification
+inside the hosted runtime before a recurring run is enabled.
 
-## What the routine does
+## Archive setup
 
-Each scheduled fire spins up a fresh Claude Code context, loads `CLAUDE.md` (which `@`-imports `BUSINESS_RULES.md`), and runs the analyzer end-to-end:
+1. Open [Claude Code Routines](https://claude.ai/code/routines). Create a new
+   routine if the account has no analyzer registration. Use
+   `.claude/commands/run-analyzer.md` and select the intended schedule and
+   BigQuery connector.
+2. Select the analyzer code repo and the separately approved private archive
+   repo. The analyzer code checkout needs read access only. Set
+   `REPORT_ARCHIVE_CHECKOUT` to the private checkout root and
+   `REPORT_ARCHIVE_REPOSITORY` to its GitHub owner and repository.
+3. Set `REPORT_DESTINATION=archive`, `REPORT_ARCHIVE_REQUIRED=1`, `BQ_PROJECT`
+   and `BQ_DATASET`. The helper needs an authenticated `gh` for repository
+   visibility and a GitHub origin for its readback. The helper holds before
+   data queries if the hosted checkout uses a URL or credentials it cannot
+   verify. Keep credentials in the routine environment.
+4. Scope any authorized commit to the exact staged bundle path. Use the
+   operator-approved private branch and an explicit push target such as
+   `git push origin "HEAD:refs/heads/${archive_branch}"`. Use the schedule
+   prompt to direct writes exclusively to that private checkout. Keep report
+   data out of the analyzer code checkout's Git index.
+5. Read back the task configuration. Use an authorized private test to confirm
+   the selected repositories, GitHub authentication, write scope and readback
+   from a fresh hosted session. A local fixture verifies local behavior only.
 
-1. Check BigQuery freshness (Data Health).
-2. Query `youtube_analytics` for the metrics needed.
-3. Read the most recent 3 to 4 reports in `reports/` to calibrate confidence (see `CLAUDE.md` § Persistent structure).
-4. Draft the weekly report.
-5. Hand the report to the `write-notion-report` skill, which publishes to the channel-patterns Notion page.
-6. Save the report to `reports/{run_date}.md` and run metadata to `runs/{run_date}/`.
+Artifacts stay in the ignored `.internal/channel-patterns/` directory until
+the staging helper copies a verified run to
+`records/channel-patterns/runs/<run-key>/` in the private checkout. Each run key
+has one path. A different bundle at that path is a conflict. The SHA-256
+manifest covers the report, summary and three canonical query results.
+The next analyzer session reads calibration reports from a fetched revision
+of the private default branch. Fixtures and incomplete runs stay out of
+calibration.
 
-## Local vs. cloud, why the distinction matters
+## Retention readback
 
-A routine that works perfectly in a local Claude Code terminal can fail silently in the cloud, because the environments don't share state.
-
-| Concern | Local terminal | Cloud routine |
-|---|---|---|
-| BigQuery auth | Your `gcloud` login | BigQuery web connector (authorized once in your Anthropic account) |
-| Notion access | Local MCP server | Web connector in your Anthropic account |
-| Repo access | Local clone | Repo selected in the routine config |
-| Environment variables | Your shell / `.env` | Per-routine config in the Anthropic UI |
-
-When wiring or debugging the routine, verify each row above explicitly. The most common failure is "works locally" plus "Notion write failed in the cloud", because the local MCP isn't visible to the cloud routine, only the web connector is.
-
-## Cloud routine setup walkthrough
-
-Run once when first wiring the routine. After that, edits use the same form (see Changing the schedule below).
-
-1. Authorize the BigQuery and Notion connectors once. In your Anthropic account at https://claude.com, go to Settings, Connectors. Verify both BigQuery (Google Cloud) and Notion are connected. The cloud routine has no `bq` or `gcloud` CLI installed; the BigQuery connector is the only data path.
-2. Open the Routines page. claude.com, Settings, Routines, New Routine.
-3. Routine name: `channel-patterns-analyzer-weekly`.
-4. Instructions. Paste the full contents of `.claude/commands/run-analyzer.md` into the Instructions box. The recipe is self-contained; do not edit it after pasting (edits drift from the repo source; see `docs/maintenance.md`).
-5. Repositories. Select `channel-patterns-analyzer`. Required: Step 4 of the recipe reads prior reports from the cloned repo.
-6. Trigger. Select Schedule, Weekly, Monday, 9:00 AM, America/Phoenix.
-7. Connectors. Verify BigQuery (Google Cloud) and Notion appear under Connectors. Remove any others (Slack, Linear, etc.) that are not needed.
-8. Environment variables. Open the environment's settings (the cloud icon below the Instructions box, then the settings icon, then Environment variables) and add three:
-   - `NOTION_REPORT_PAGE_ID=<from your local .env>`
-   - `BQ_PROJECT=<your GCP project id>`
-   - `BQ_DATASET=youtube_analytics`
-9. Click Create.
-
-## Run-now checklist
-
-Click Run now on the routine's detail page. Verify within about 3 minutes:
-
-- [ ] (a) A new child page appears under the channel-patterns parent in Notion within 60 seconds, titled `Weekly report, {today's Phoenix date}`. If not, the failure is most likely Notion connector auth (`docs/runbook.md` § "Notion connector not authorized"), BigQuery connector auth (`docs/runbook.md` § "BigQuery MCP connector not authorized"), or the broader Notion write surface (`docs/runbook.md` § "Notion write failed").
-- [ ] (b) The Notion page renders all six sections: Data Health, Headline, What is working, What is not working, Patterns worth watching, Open questions. Spot-check one finding for a `(label, n=N)` parenthetical; Notion should render it as plain text (not stripped, not linkified). If the page is missing sections or a required key, the recipe stopped at Step 8; see `docs/runbook.md` § "Skill input dict missing a required key".
-- [ ] (c) The Anthropic UI shows the routine run as completed (green status). Note: green means the session exited without an infrastructure error, not that the analysis succeeded. Open the run transcript and confirm no `category: ...` error lines appear. If the run hung or did not complete, see `docs/runbook.md` § "Routine run timed out or hung". If the UI shows an infrastructure error before the recipe's first step executed, see `docs/runbook.md` § "Anthropic UI shows error before recipe runs".
-- [ ] (d) After the cloud routine's PR merges (or you `git pull` the `claude/...` branch), `runs/{date}/summary.json` exists with `notion_write_ok: true` and an empty `errors: []` array. If `errors[]` is non-empty, each entry's `category` field names the matching `docs/runbook.md` section by convention (e.g. `env_missing` → "Routine environment variable missing in cloud config", `no_bigquery_transport` → "No BigQuery transport available", `report_dict_invalid` → "Skill input dict missing a required key").
-
-If any check fails, the linked runbook section names the recovery. If a check fails in a way no section covers, add a new runbook section as part of the fix (per `.claude/commands/run-analyzer.md` Step 11 closing instruction; ERR-03).
-
-## Re-running manually
-
-For ad-hoc runs (testing a query change, recovering from a failure):
+After the bundle reaches the private default branch, use the path and SHA-256
+from staging to verify retention.
 
 ```bash
-cd /Users/kylechalmers/Development/channel-patterns-analyzer
-claude
-> "Run the analyzer."
+python3 scripts/private_report_archive.py --checkout "$REPORT_ARCHIVE_CHECKOUT" \
+  --repository "$REPORT_ARCHIVE_REPOSITORY" --verify-retained "$bundle_path" "$manifest_sha256"
 ```
 
-`CLAUDE.md` loads automatically. The analyzer writes to Notion and to `reports/` + `runs/` as normal. If you don't want the manual run to land in the archive, say so up front.
+Use the returned revision in the retention receipt. Report pending review
+if the bundle is on a branch only. Report a held transfer if the required
+write or readback is unavailable. Preserve the local archive and the existing
+receipts in either case. Stage only the returned path and use a non-force push.
 
-## Changing the schedule
+## Local reruns and legacy output
 
-Edit the routine in the Anthropic UI (Routines, channel-patterns-analyzer). The cadence, time, and timezone live there, not in the repo. If the cadence changes, update this file and add a `CHANGELOG.md` entry; the rest of the docs assume "weekly."
+Run `/run-analyzer` from the analyzer checkout. Local runs may keep their
+artifacts in ignored storage. `DATA_SOURCE=csv` uses synthetic data and stays
+local. The recipe uses reported transport and simulation warnings to identify
+fixtures.
 
-## Reference
-
-- [Claude Code Routines (`/schedule`)](https://code.claude.com/docs/en/routines), official docs.
-- `docs/runbook.md`, what to do when a scheduled run errors.
+The optional legacy `REPORT_DESTINATION=notion` is for explicitly configured
+local runs. It uses ignored storage and requires the Notion connector and
+`NOTION_REPORT_PAGE_ID`. See [the runbook](runbook.md) for errors and
+[the Claude Code Routines guide](https://code.claude.com/docs/en/routines) for
+task controls.

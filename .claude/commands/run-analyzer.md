@@ -1,29 +1,35 @@
 ---
-description: Run the weekly channel-patterns analyzer end-to-end. Pulls data-health + canonical queries from BigQuery, drafts a minimal report, publishes to Notion via the write-notion-report skill, and persists local artifacts.
+description: Run the weekly channel-patterns analyzer end-to-end. Pulls data-health + canonical queries from BigQuery, drafts a minimal report, and saves it using the configured report destination.
 disable-model-invocation: true
 ---
 
 # /run-analyzer
 
-This is the linear recipe an operator (or a cloud routine) runs to produce one weekly report. Every step has side effects (BigQuery reads, file writes, Notion writes). It is intentionally not auto-invocable.
+This is the linear recipe an operator (or a cloud routine) runs to produce one weekly report. It reads BigQuery, saves artifacts, and uses the configured destination. It is intentionally not auto-invocable.
 
 Before drafting any prose for the report, read `CLAUDE.md` (voice, age control, sample-size thresholds, report structure) and `BUSINESS_RULES.md` (fiscal calendar, table grain, freshness contract). The recipe orchestrates; the analyzer rules live there.
 
 ## Step 0: Preflight
 
-1. Read `.env`. Confirm `BQ_PROJECT`, `BQ_DATASET` (default `youtube_analytics` if unset), and `NOTION_REPORT_PAGE_ID` are all populated.
-2. Compute the run date in Phoenix time: `run_date = $(TZ=America/Phoenix date +%Y-%m-%d)`. Phoenix is UTC-7 year-round (no DST). Use this `{run_date}` value everywhere downstream.
-3. `mkdir -p runs/{run_date}/queries/ reports/`.
-4. If any required env var is missing, write a minimal `runs/{run_date}/summary.json` with `errors: [{"category": "env_missing", "message": "<NAME> not set", "step": "preflight"}]`, surface the operator message naming the missing var, and STOP. No transport probe, no queries.
+1. Read the runtime configuration. Use `REPORT_DESTINATION` from the environment or `.env`, with the environment taking precedence. If neither defines it, use `archive`. An explicit empty or invalid value fails preflight. Archive mode requires `BQ_PROJECT` and `BQ_DATASET` (default `youtube_analytics` if unset) for live data. The explicit legacy Notion mode also requires `NOTION_REPORT_PAGE_ID`. Read only settings relevant to the selected destination.
+2. Compute `run_date` with `TZ=America/Phoenix date +%Y-%m-%d`. Use that calendar date in queries and report content.
+3. Pass the resolved `REPORT_DESTINATION`, `DATA_SOURCE` and any configured `REPORT_ARCHIVE_*` variables to each helper in its own shell invocation. Run `python3 scripts/prepare_report_run.py --destination "$REPORT_DESTINATION" --run-date "$run_date"` from the repository root. The helper reserves an exclusive ignored attempt in either mode and returns `artifact_root` and `run_key`. Stop on a preflight error before probing transports. All `runs/` and `reports/` paths below are relative to `artifact_root`, including early failures and shell redirections. SQL, scripts and settings stay relative to the repository root.
+4. If any required env var is missing, write a minimal `runs/{run_key}/summary.json` with `errors: [{"category": "env_missing", "message": "<NAME> not set", "step": "preflight"}]`, surface the operator message naming the missing var, and STOP. No transport probe, no queries.
 5. **Validate `BQ_DATASET` against BigQuery identifier rules.** `BQ_DATASET` is string-substituted into backtick-quoted SQL identifiers in Steps 2, 3, and 5 (e.g., `` `${BQ_DATASET}.video_metadata` ``). A value containing a backtick, a comma, or other BigQuery metacharacters could break out of the backtick quoting and either parse-error noisily or query an unintended dataset. Treat `BQ_DATASET` as a potentially-hostile input even though `.env` is operator-controlled (defense in depth).
    - Required regex: `^[A-Za-z_][A-Za-z0-9_]*$` (BigQuery dataset identifier rules: letter or underscore start, then letters/digits/underscores).
-   - If `BQ_DATASET` fails this check, write `runs/{run_date}/summary.json` with `errors: [{"category": "env_invalid", "message": "BQ_DATASET contains non-identifier characters: <value>", "step": "preflight"}]`, surface the operator message naming the invalid env var, and STOP. No transport probe, no queries.
+   - If `BQ_DATASET` fails this check, write `runs/{run_key}/summary.json` with `errors: [{"category": "env_invalid", "message": "BQ_DATASET contains non-identifier characters: <value>", "step": "preflight"}]`, surface the operator message naming the invalid env var, and STOP. No transport probe, no queries.
    - `BQ_PROJECT` is passed to `bq` via `--project_id="$BQ_PROJECT"` (positional, never string-substituted into SQL) and to the MCP wrapper as a JSON argument, so it does not need the same treatment. Still reject obviously malformed values (empty after trim, contains whitespace) as a sanity check.
 6. Argument handling: `/run-analyzer` takes no arguments. If `$ARGUMENTS` is non-empty, record a `warnings: ["arguments_ignored: <value>"]` entry in `summary.json` and continue. Do not interpret the argument as a flag.
+7. For a live archive run with a destination configured, run the command below before Step 1. The helper checks GitHub privacy and fetches the default branch. Claude Code cloud sessions and `REPORT_ARCHIVE_REQUIRED=1` require this destination for live data. If verification fails, write a held summary and stop before querying BigQuery. Fixture runs with `DATA_SOURCE=csv` stay local and need no GitHub access.
+
+   ```bash
+   python3 scripts/private_report_archive.py --checkout "$REPORT_ARCHIVE_CHECKOUT" \
+     --repository "$REPORT_ARCHIVE_REPOSITORY" --verify-checkout
+   ```
 
 ## Step 1: Probe transports
 
-**Operator override (checked before auto-detection):** if `BQ_TRANSPORT` is set to `bq_cli` or `bq_mcp`, use that value verbatim as `TRANSPORT` and skip the auto-detect probe below. If `BQ_TRANSPORT` is set to any other value, record `warnings: ["bq_transport_invalid: <value>; falling back to auto-detect"]` in `summary.json` (held in working memory until Step 10) and continue with auto-detection. This override is the smoke-test hook documented at the bottom of this step; without it the `bq_mcp` branch is unreachable on Kyle's laptop because `bq` is always on PATH and the probe below would always pick `bq_cli`.
+**Operator override for live runs:** with any `DATA_SOURCE` other than `csv`, use a valid `BQ_TRANSPORT` override of `bq_cli` or `bq_mcp` and skip auto-detection. On an invalid value, record `warnings: ["bq_transport_invalid: <value>; falling back to auto-detect"]` and proceed to the probe. `DATA_SOURCE=csv` always uses the fixture route below.
 
 Otherwise, probe the session for an available transport, in this order:
 
@@ -42,14 +48,14 @@ Otherwise, probe the session for an available transport, in this order:
     The recipe does not auto-stale. The CSV branch is a short-circuit, not a parallel probe: when `DATA_SOURCE=csv` is set, the recipe does NOT then try `command -v bq` (it would falsely succeed on a developer machine that has `bq` installed for other projects and confuse the `summary.json.transport` audit trail).
 - Try `command -v bq` via Bash. If `bq` is on PATH, set `TRANSPORT=bq_cli`.
 - Else check whether `mcp__claude_ai_Google_Cloud_BigQuery__execute_sql_readonly` is loaded in the session. The agent can introspect the list of available tools at session start (the same list surfaced by the runtime's tool-discovery API); if the tool name appears in that list, the transport is available and `TRANSPORT=bq_mcp`. There is no way to test this from a shell; it requires the agent's own session-tool introspection.
-- Else write `runs/{run_date}/summary.json` with `errors: [{"category": "no_bigquery_transport", "message": "neither bq CLI nor BigQuery MCP available", "step": "transport_probe"}]` and STOP.
+- Else write `runs/{run_key}/summary.json` with `errors: [{"category": "no_bigquery_transport", "message": "neither bq CLI nor BigQuery MCP available", "step": "transport_probe"}]` and STOP.
 
 Invocation shapes (use verbatim):
 
 - `bq_cli`: `printf '%s' "$SQL" | bq --format=json query --use_legacy_sql=false --project_id="$BQ_PROJECT"`. SQL goes in via **stdin pipe**, never as a positional argument. The `--format=json` flag is GLOBAL and goes BEFORE the `query` subcommand. Capture stderr separately because `bq` writes auth-refresh messages to stderr. Row-count control is handled at the SQL level (use `LIMIT` inside the SQL file if a cap is needed); do NOT pass `--max_rows` to `bq query`. That flag is not valid for the `query` subcommand and crashes bq's argument parser with a Python `RecursionError`. The Phase 1 default 100-row cap is the only fallback; Plan 02-01 removed `LIMIT 20` from `sql/02` and `sql/03`, so very large result sets in those queries would be capped at 100 rows by bq's default. The dataset is small enough (~23 full-length videos) that this is not a practical concern; if it ever becomes one, raise the cap via `--n` (which the `query` subcommand does accept) or push a `LIMIT` into the SQL.
 - The stdin-pipe form is also required because every `sql/` file in this repo uses Unicode box-drawing characters (`─` U+2500) in its header comment. Passing those characters as a positional argument trips the same `RecursionError` in bq's flag-suggester (the parser treats the leading dash as flag-like). Piping via stdin avoids that path entirely. The `bq_mcp` branch is unaffected (SQL crosses the wire as a JSON string argument).
 - `bq_mcp`: invoke `mcp__claude_ai_Google_Cloud_BigQuery__execute_sql_readonly` with arguments `{"projectId": "<BQ_PROJECT value>", "query": "<SQL string>"}`. Note: `projectId` is camelCase and REQUIRED (the wrapper does NOT fall back to gcloud config). The response is `{"jobComplete": ..., "rows": [{"f": [{"v": ...}, ...]}, ...], "schema": {"fields": [{"name": ..., "type": ...}, ...]}, ...}`. Rows come back in positional shape: zip each row's `f` array against `schema.fields[].name` to recover column names. Numeric metadata (`totalBytesBilled`, `totalBytesProcessed`) is returned as JSON strings; coerce before any arithmetic.
-- `csv`: `python scripts/csv_query.py <query_name>` where `<query_name>` is one of `data_health`, `top_full_length_videos`, `eligible_video_count`. The helper reads `sample_data/*.csv`, applies the same filters/joins as the corresponding `sql/*.sql` file (or, for `eligible_video_count`, the inline SQL in Step 5), and emits a JSON array to stdout matching `bq --format=json query`'s shape (top-level array, all values as JSON strings, column names matching the SQL aliases). No `--project_id` or dataset arg; CSV mode is project-agnostic. Capture stdout to the same `runs/{run_date}/queries/<query_name>.json` path the BigQuery branches write to. No `.stderr` sidecar (Python writes tracebacks to stderr only on failure; the success path is clean stdout). On non-zero exit, capture stderr inline into the error block per the failure-routing rules at the bottom of each step.
+- `csv`: `python scripts/csv_query.py <query_name>` where `<query_name>` is one of `data_health`, `top_full_length_videos`, `eligible_video_count`. The helper reads `sample_data/*.csv`, applies the same filters/joins as the corresponding `sql/*.sql` file (or, for `eligible_video_count`, the inline SQL in Step 5), and emits a JSON array to stdout matching `bq --format=json query`'s shape (top-level array, all values as JSON strings, column names matching the SQL aliases). No `--project_id` or dataset arg; CSV mode is project-agnostic. Capture stdout to the same `runs/{run_key}/queries/<query_name>.json` path the BigQuery branches write to. No `.stderr` sidecar (Python writes tracebacks to stderr only on failure; the success path is clean stdout). On non-zero exit, capture stderr inline into the error block per the failure-routing rules at the bottom of each step.
 
 **Transport smoke-test note (first-time operators):** Run the recipe once with `BQ_TRANSPORT=bq_cli` and once with `BQ_TRANSPORT=bq_mcp` to confirm both paths produce identical row counts for `data_health` and `top_full_length_videos`. Phase 1 only exercised `bq_cli` live; the MCP branch is documented but unverified end-to-end. A divergence between the two transports on the same snapshot is a transport bug, not a data bug.
 
@@ -57,14 +63,14 @@ Invocation shapes (use verbatim):
 
 Read `sql/04_data_health_check.sql`. Substitute every literal `youtube_analytics` in the file contents with the value of `$BQ_DATASET` (in-memory string replace; do not edit the file on disk). The file already uses `CURRENT_DATE("America/Phoenix")` (double-quoted, the canonical form Plan 02-01 standardized on across `sql/02..04`), so no timezone substitution is needed.
 
-Dispatch the rewritten SQL to `$TRANSPORT`. Capture stdout to `runs/{run_date}/queries/data_health.json`. For `bq_cli`, capture stderr to `runs/{run_date}/queries/data_health.stderr` so the JSON capture stays clean. For `bq_mcp`, errors come back in the tool response itself, not stderr. When `$TRANSPORT=csv`, the dispatch is `python scripts/csv_query.py data_health` (the in-memory SQL substitution from the prior paragraph is a no-op; the CSV helper does not consume SQL). Output captured to the same `runs/{run_date}/queries/data_health.json` path.
+Dispatch the rewritten SQL to `$TRANSPORT`. Capture stdout to `runs/{run_key}/queries/data_health.json`. For `bq_cli`, capture stderr to `runs/{run_key}/queries/data_health.stderr` so the JSON capture stays clean. For `bq_mcp`, errors come back in the tool response itself, not stderr. When `$TRANSPORT=csv`, the dispatch is `python scripts/csv_query.py data_health` (the in-memory SQL substitution from the prior paragraph is a no-op; the CSV helper does not consume SQL). Output captured to the same `runs/{run_key}/queries/data_health.json` path.
 
 Parse the 4-row result. Each row has `table_name`, `latest_snapshot`, `days_stale`. Build:
 
 - `snapshot_dates`: a map `{table_name: latest_snapshot}` for every row.
 - `stale_tables`: a list of strings like `"daily_video_analytics (89 days)"` for every row whose `days_stale > 3`.
 
-**`SIMULATE_STALE` override (testing only):** If the env var `SIMULATE_STALE` is set, parse it as a comma-separated list of `table_name:days` pairs and override the parsed `days_stale` for the named tables before computing `stale_tables`. Example: `SIMULATE_STALE="daily_video_analytics:89,daily_traffic_sources:89"` simulates the 89-day-stale state the channel had on 2026-05-24. The override mutates the in-memory `data_health` rows only; it does NOT modify the BigQuery result on disk (`runs/{run_date}/queries/data_health.json` still contains the real values). Record a `warnings: ["simulate_stale_applied: <value of SIMULATE_STALE>"]` entry in `summary.json` when the override fires, so the audit trail shows the data was synthetic. This exists because Phase 1's 89-day stale state on `daily_video_analytics` and `daily_traffic_sources` resolved on 2026-05-25, leaving no live way to exercise the stale-table disclaimer machinery (D-12) end-to-end. The override is a recipe-level seam; it does not require a CLI flag, an SQL edit, or a BigQuery change.
+**`SIMULATE_STALE` override (testing only):** If the env var `SIMULATE_STALE` is set, parse it as a comma-separated list of `table_name:days` pairs and override the parsed `days_stale` for the named tables before computing `stale_tables`. Example: `SIMULATE_STALE="daily_video_analytics:89,daily_traffic_sources:89"` simulates the 89-day-stale state the channel had on 2026-05-24. The override mutates the in-memory `data_health` rows only; it does NOT modify the BigQuery result on disk (`runs/{run_key}/queries/data_health.json` still contains the real values). Record a `warnings: ["simulate_stale_applied: <value of SIMULATE_STALE>"]` entry in `summary.json` when the override fires, so the audit trail shows the data was synthetic. This exists because Phase 1's 89-day stale state on `daily_video_analytics` and `daily_traffic_sources` resolved on 2026-05-25, leaving no live way to exercise the stale-table disclaimer machinery (D-12) end-to-end. The override is a recipe-level seam; it does not require a CLI flag, an SQL edit, or a BigQuery change.
 
 **SIMULATE_STALE validation (required before applying any override):**
 
@@ -85,7 +91,7 @@ Failure routing:
 
 Read `sql/02_top_full_length_videos.sql`. Substitute `youtube_analytics` -> `$BQ_DATASET` the same way. This query joins `video_metadata` and `daily_video_stats` on `(video_id, snapshot_date)` per `BUSINESS_RULES.md § "Table grain and join keys (data contract)"` (never on `video_id` alone, which would Cartesian-explode across snapshots).
 
-Dispatch to `$TRANSPORT`. Capture stdout to `runs/{run_date}/queries/top_full_length_videos.json` (and stderr to the matching `.stderr` file for `bq_cli`). When `$TRANSPORT=csv`, the dispatch is `python scripts/csv_query.py top_full_length_videos`. Same output path.
+Dispatch to `$TRANSPORT`. Capture stdout to `runs/{run_key}/queries/top_full_length_videos.json` (and stderr to the matching `.stderr` file for `bq_cli`). When `$TRANSPORT=csv`, the dispatch is `python scripts/csv_query.py top_full_length_videos`. Same output path.
 
 If `daily_video_stats` appeared in `stale_tables` from Step 2, record the staleness flag for Step 6 so the "What is working" section can disclaim it (HEALTH-03). If `daily_video_analytics` is stale, that affects the empty-by-design Phase 1 sections (which already say "not analyzed this run"); note it but do not block.
 
@@ -95,10 +101,11 @@ If the query returns zero rows, this is a BQ-03 failure: record `errors: [{"cate
 
 This step implements ANALYSIS-05 (read prior reports for confidence calibration) and the prior-report citation rule (do not cite prior reports in prose; banned phrases listed in Step 6 below). Run AFTER Step 3 (top-videos pull) and BEFORE the draft step.
 
-1. Select the **3 most recent distinct prior dates** from `reports/`, excluding today's date (today's same-day retry, if any, belongs to "this run", not the calibration archive). Lexicographic `sort | tail -n 3` over filenames is wrong here: same-day retries (`YYYY-MM-DD-N.md`) sort after the original and would let a single prior date monopolize all three slots. Pick distinct dates first, then resolve each date to its canonical file:
+1. Select the three most recent distinct dates before today. For a live private archive run, call `python3 scripts/private_report_archive.py --checkout "$REPORT_ARCHIVE_CHECKOUT" --repository "$REPORT_ARCHIVE_REPOSITORY" --prior "$run_date"`. Use the returned revision and paths to read both report and summary with `git -C "$REPORT_ARCHIVE_CHECKOUT" show "$revision:$path"`. Record rejected bundles as a warning. For a live local-only archive, call `python3 scripts/prepare_report_run.py --destination archive --run-date "$run_date" --list-complete`. Read the returned run keys under `artifact_root`. Hold if the selected helper fails. Use an empty prior list for CSV or simulated runs.
+   For explicit legacy Notion runs, use the local report names and pick distinct dates before selecting the newest same-day attempt.
    ```bash
    # 1a. Extract distinct prior dates (newest 3, excluding today):
-   prior_dates=$(ls reports/ \
+   prior_dates=$(ls "$artifact_root/reports" \
      | grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}(-[0-9]+)?\.md$' \
      | sed -E 's/^([0-9]{4}-[0-9]{2}-[0-9]{2}).*/\1/' \
      | sort -u \
@@ -109,15 +116,15 @@ This step implements ANALYSIS-05 (read prior reports for confidence calibration)
    #     `{date}.md` (steady state) or the highest-suffix `{date}-N.md`
    #     (latest same-day retry wins as the canonical record for that date).
    for d in $prior_dates; do
-     latest=$(ls reports/ | grep -E "^${d}(-[0-9]+)?\.md$" | sort -V | tail -n 1)
-     # read reports/$latest
+     latest=$(ls "$artifact_root/reports" | grep -E "^${d}(-[0-9]+)?\.md$" | sort -V | tail -n 1)
+     # read "$artifact_root/reports/$latest"
    done
    ```
    The naming convention is `YYYY-MM-DD.md` (steady state) or `YYYY-MM-DD-N.md` (same-day retry). The two-step selection (distinct dates first, then highest-suffix within each date) guarantees three different prior dates are read whenever three or more exist in the archive, which is what the calibration logic requires.
 
    **Assertion:** The list of dates assembled in step 6 below (`prior_reports_consulted`) MUST contain only distinct `YYYY-MM-DD` values. If two same-date entries ever appear, the selection above failed and the run should record `warnings: ["prior_report_selection_duplicate_date: <date>"]` in `summary.json`.
 2. Read those files in full (zero, one, two, or three of them, whatever exists). Hold the content in working memory for the draft step.
-3. For each file read, also read its sibling `runs/{date}/summary.json` and capture the `snapshot_dates` map. This is the per-run snapshot calibration logic: confidence calibration uses the *observed* snapshot_dates from each prior run, not assumptions about state continuity. Critical context: the 89-day stale state on `daily_video_analytics` and `daily_traffic_sources` resolved between 2026-05-24 and 2026-05-25, so reading the prior `summary.json` is the only way to know which sections of each prior report were drawing from fresh vs. stale data at the time.
+3. Read the matching run summary for `snapshot_dates`. In a private Git bundle, `summary.json` is beside `report.md`. In local storage, the run directory uses the full report filename stem, including any retry suffix. Use the observed snapshot dates for calibration.
 4. Use prior reports to:
    - **Upgrade confidence labels** if a pattern has held across runs and the eligible set has grown (e.g., what was `moderate confidence, n=7` four weeks ago may now be `standard confidence, n=12`).
    - **Downgrade confidence** if a pattern has weakened or the sample shrank.
@@ -128,7 +135,7 @@ This step implements ANALYSIS-05 (read prior reports for confidence calibration)
    - Banned phrases: `"as we said last week"`, `"as noted previously"`, `"the prior report"`, `"this continues the trend we observed"`. (The bare phrase `"as noted"` is intentionally NOT in this list because it false-positives on legitimate prose like `"as noted in the data"` or `"as noted above"`. The fuller `"as noted previously"` already catches the prior-report-citation case.)
 6. Record the dates actually consulted as a JSON array of `YYYY-MM-DD` strings (e.g., `["2026-05-18", "2026-05-11", "2026-05-04"]`). Hold this list in working memory until Step 10 (write summary.json) writes it to `summary.json.prior_reports_consulted` (D-10). If zero prior reports were consulted (the archive is empty), the recorded value is `[]`. Verify at draft time that the list does not include today's `run_date`. Same-day retries belong to "this run", not the calibration archive.
 
-Zero-or-few-priors handling: if fewer than three reports exist (or none), read what is there and continue. Do not block. The first Phase 2 run will have at most one prior report (the Phase 1 report from 2026-05-25).
+If fewer than three eligible prior reports exist, read the available ones and continue. A fresh archive can have zero eligible reports.
 
 ## Step 5: Query live eligible video count
 
@@ -163,7 +170,7 @@ WHERE (SELECT snapshot_date FROM latest_common) IS NOT NULL
 
 Substitute `${BQ_DATASET}` with `$BQ_DATASET` (in-memory; do not write the rewritten SQL to disk). Dispatch via `$TRANSPORT` using the Step 1 invocation shape (`printf '%s' "$SQL" | bq --format=json query ...` for `bq_cli`; `execute_sql_readonly` for `bq_mcp`). When `$TRANSPORT=csv`, the dispatch is `python scripts/csv_query.py eligible_video_count`. Same output path. The inline SQL composed earlier in this step is informative for the BigQuery branch only; the CSV helper has the same logic hand-coded.
 
-Persist the raw query result to `runs/{run_date}/queries/eligible_video_count.json` (BQ-02 convention) so the audit trail captures the denominator behind every confidence label this run.
+Persist the raw query result to `runs/{run_key}/queries/eligible_video_count.json` (BQ-02 convention) so the audit trail captures the denominator behind every confidence label this run.
 
 Derive the channel-wide confidence label from `eligible_count` per CLAUDE.md § "Small samples get hedged, every time":
 
@@ -258,11 +265,11 @@ The `SIMULATE_STALE` env-var (Step 2) is the testing path for this rule when no 
 
 The draft step ends by assembling the structured report dictionary the existing `write-notion-report` Skill invocation step consumes. Per PHASE1-ASSUMPTIONS-VERIFIED.md A2: Phase 1's Skill renders Notion blocks from `markdown_body` only and the per-finding `confidence` field on `working[]` / `not_working[]` / `patterns[]` entries is a plain string (`"low" | "moderate" | "standard"`), not a structured `{label, n}` dict. Plan 02-02 keeps the markdown-rendering path: place the full `(label, n=N).` parenthetical inline in the prose (inside `markdown_body` and inside each entry's `body` string), and populate the entry-level `confidence` field with the label string only. The `n` lives in the prose. A future Skill enrichment can promote `confidence` to `{label, n}` without breaking this contract.
 
-Write the assembled markdown to `reports/{run_date}.md`. Also copy the same content to `runs/{run_date}/report.md` per the folder layout in `runs/README.md`.
+Write the assembled markdown to `reports/{run_key}.md`. Also copy the same content to `runs/{run_key}/report.md` per the folder layout in `runs/README.md`.
 
-## Step 7: Self-audit (run AFTER draft is assembled, BEFORE invoking write-notion-report)
+## Step 7: Audit the assembled report before writing to its destination
 
-This step is the self-audit gate (Layer 2 of the voice-and-structure verification): Step 6 made the rules explicit at draft time (Layer 1); this step verifies the rules were actually followed. Without it, the draft step still depends on the analyzer remembering to apply the voice rules; with it, every run gates publish on a copy-into-response checklist and the audit trail makes silent voice violations visible after the fact. Run AFTER Step 6 (draft assembled, markdown written to `reports/{run_date}.md`) and BEFORE Step 8 (assemble the report dict for `write-notion-report`).
+Audit the draft before preparing the destination handoff. Record the checklist results and any fixes. After all fixes, copy the final bytes from `reports/{run_key}.md` to `runs/{run_key}/report.md`.
 
 The pattern is the copy-into-response checklist from Anthropic's Skill best practices: literally copy the checkbox list below into the working response and tick each item as the draft is walked. The checklist mirrors `CLAUDE.md` rules 1:1, referenced by section title so future `CLAUDE.md` edits flow through by re-derivation, not parallel maintenance.
 
@@ -298,7 +305,7 @@ Prior-report citation checks (D-08 / D-09, per CLAUDE.md § "Report structure"):
 - [ ] Multi-week claims (if any) stand on their own without requiring the reader to have seen a prior report (D-09 example: "For the third consecutive week, X has held." is allowed).
 
 Provenance check (per CLAUDE.md § "Verification & Evidence"):
-- [ ] Numbers cited in the draft are present in the underlying runs/{run_date}/queries/*.json files. Spot-check three randomly chosen claims by grepping the value in the queries directory.
+- [ ] Numbers cited in the draft are present in the underlying runs/{run_key}/queries/*.json files. Spot-check three randomly chosen claims by grepping the value in the queries directory.
 ```
 
 ### Recording the audit trail
@@ -306,7 +313,7 @@ Provenance check (per CLAUDE.md § "Verification & Evidence"):
 The checklist's purpose is dual: gate the publish, and leave a machine-readable audit trail. For each item:
 
 - **For each PASSED check:** append the canonical check identifier (snake-case names listed below) to `summary.json.voice_audit.checks_passed` (held in working memory until Step 10 writes summary.json).
-- **For each FAILED check:** fix the violation inline in the draft (edit `reports/{run_date}.md` and the corresponding `markdown_body` string in working memory; do not advance to the assemble-dict step until the fix is applied), then append a structured entry to `summary.json.voice_audit.fixes_applied` with shape `{"section": "<section name>", "fix": "<one-line description of what was changed>"}`. Example: `{"section": "Patterns worth watching", "fix": "Replaced em dash with comma in framing of tool-tutorials trend"}`.
+- **For each FAILED check:** fix the violation inline in the draft (edit `reports/{run_key}.md` and the corresponding `markdown_body` string in working memory; do not advance to the assemble-dict step until the fix is applied), then append a structured entry to `summary.json.voice_audit.fixes_applied` with shape `{"section": "<section name>", "fix": "<one-line description of what was changed>"}`. Example: `{"section": "Patterns worth watching", "fix": "Replaced em dash with comma in framing of tool-tutorials trend"}`.
 
 ### Canonical check identifiers
 
@@ -332,17 +339,19 @@ These are the snake-case names to use in `voice_audit.checks_passed`:
 
 ### Publish gate (RESEARCH.md Pitfall 3 mitigation)
 
-When all checks pass, proceed to Step 8 (Assemble the report dict) and from there to Step 9 (Invoke `write-notion-report`). Do NOT advance to the assemble-dict step while any item remains unticked. The Skill SHOULD NOT be invoked while any item remains unticked.
+When all checks pass, continue according to the selected destination. In archive mode, save the audited final bytes to both report paths and go directly to Step 10. Notion mode continues to Step 8 and Step 9. Keep the destination from Step 0 throughout. An incomplete audit cannot produce either success status.
 
-**Enforcement is honor-system, not code.** The gate is markdown instructions to the analyzer agent, not a runtime check. Two consequences:
-- "SHOULD NOT" (not "MUST NOT") accurately describes the strength of enforcement here. A future Python-side validator could promote this to a hard MUST (TODO: surface `voice_audit` presence as a precondition in a wrapper script around Step 9), but until that lands the strongest available enforcement is the agent's compliance with this recipe.
-- **Step 9 precondition (markdown gate, layer 2):** before invoking `write-notion-report` in Step 9, re-verify that `voice_audit.checks_passed` is non-empty in working memory. If it is empty or missing, return to Step 7 and run the audit. This second instruction means the agent must violate TWO explicit recipe steps to skip the audit, not one.
+The archive finalizer requires the complete set of audit identifiers. The
+analyzer attests to each check. For legacy output, Step 9 verifies the audit
+before invoking `write-notion-report`.
 
 If a check cannot be ticked because the data needed to verify it is unavailable or because the case genuinely falls outside the checklist's scope, record the reason in `summary.json.voice_audit.fixes_applied` with `section: "(audit)"` and `fix: "could not verify <check_identifier>: <reason>"`, and proceed only if the reason is genuinely outside the checklist's scope. Do not use this escape hatch to skip checks that could be verified with a little more work.
 
-A missing or empty `summary.json.voice_audit` block after a successful run indicates the self-audit step did not execute. That is visible after the fact even though enforcement is markdown, not code; it is itself a finding for the next run's analyst to investigate.
+A missing or empty `summary.json.voice_audit` block on an old run is a gap in its evidence. Investigate it before using the run for calibration.
 
 ## Step 8: Assemble the report dict
+
+This step applies only to `destination: notion`.
 
 Build a strict 8-key dict matching the `write-notion-report` Skill's input contract (defined in `.claude/skills/write-notion-report/SKILL.md`):
 
@@ -359,6 +368,8 @@ Validate before Step 9: if any key is missing, do NOT invoke the Skill. Record `
 
 ## Step 9: Invoke write-notion-report (NOTION-01..06)
 
+This step applies only to `destination: notion`.
+
 **Precondition (markdown gate per Step 7):** before invoking the Skill, confirm `voice_audit.checks_passed` in working memory is non-empty. If it is empty or missing, Step 7 did not run; return to Step 7 and complete the audit before continuing. Do not invoke the Skill on an unaudited draft.
 
 Invoke the `write-notion-report` Skill with the assembled dict. The Skill returns one of:
@@ -366,43 +377,64 @@ Invoke the `write-notion-report` Skill with the assembled dict. The Skill return
 - `{"ok": true, "page_id": "<uuid>", "url": "<notion url>"}` on success.
 - `{"ok": false, "error": "<string>", "category": "<env_missing|parent_not_found|permission_denied|transport_error|unknown>"}` on failure.
 
-Capture the return value. CRITICAL: do NOT fail the run if the Skill returns `ok: false`. Local artifacts already exist from the data-health, top-videos, eligible-count, prior-report, and draft steps; the write-summary step captures the Skill's failure in summary.json. The report has landed in `reports/{run_date}.md` regardless.
+Capture the return value. CRITICAL: do NOT fail the run if the Skill returns `ok: false`. Local artifacts already exist from the data-health, top-videos, eligible-count, prior-report, and draft steps; the write-summary step captures the Skill's failure in summary.json. The report has landed in `reports/{run_key}.md` regardless.
 
 If the Skill is not loaded in the session (the `.claude/skills/write-notion-report/SKILL.md` file is missing or the runtime did not pick it up), treat as `{"ok": false, "error": "write-notion-report skill not loaded in session", "category": "transport_error"}`. The `transport_error` category aligns with the Skill's own mapping table for "MCP tool not loaded in this session" (see `.claude/skills/write-notion-report/SKILL.md` § "Return shape and error handling"); using one of the Skill's six canonical categories keeps `summary.json.errors[].category` 1:1 with a runbook section. Queue the operator message naming docs/runbook.md section "Notion write failed" and proceed to the write-summary step.
 
 ## Step 10: Write summary.json (PERSIST-02, ERR-02)
 
-Write `runs/{run_date}/summary.json` LAST, per the schema in `runs/README.md` (which includes the additive `transport` and `notion_url` fields the Phase 1 scaffold added). Full field set:
+Write `runs/{run_key}/summary.json` LAST, per the schema in `runs/README.md` (which includes the additive `transport` and `notion_url` fields the Phase 1 scaffold added). Full field set:
 
 - `run_date`: from Step 0.
 - `run_started_at`, `run_finished_at`: ISO-8601 with Phoenix offset `-07:00`.
-- `data_source`: `"bigquery"` (Phase 1 is BQ-only; CSV-01 lands in Phase 3).
-- `transport`: `"bq_cli"` or `"bq_mcp"` from Step 1.
+- `data_source`: `"csv"` for the CSV transport or `"bigquery"` for either BigQuery transport.
+- `transport`: the selected `"bq_cli"`, `"bq_mcp"` or `"csv"` from Step 1.
 - `bq_project`, `bq_dataset`: from `.env`.
 - `snapshot_dates`: from Step 2.
 - `stale_tables`: from Step 2.
 - `video_count_full_length`: row count from Step 3.
 - `queries_run`: list with `{"file": ..., "rows": ..., "ms": ...}` per query that actually executed.
-- `report_path`: `"reports/{run_date}.md"`.
-- `notion_write_ok`: boolean from Step 9, or `false` if Step 9 was skipped due to a Step 8 dict-validation failure (`report_dict_invalid` error category). The field MUST always be present; an undefined `notion_write_ok` makes the Step 11 operator-message selection (SUCCESS vs. NOTION-FAIL vs. BQ-FAIL) ambiguous.
+- `report_path`: `"reports/{run_key}.md"`.
+- `notion_write_ok`: boolean from Step 9. Use `false` for archive mode and for a held or failed Notion write.
+- In archive mode include `report_destination: archive` and `run_key`. For an audited run with no errors, write `runs/{run_key}/summary.pending.json`, then run `python3 scripts/prepare_report_run.py --destination archive --run-date "$run_date" --finalize "$run_key"`. The helper verifies the audit, matching report copies, timezone-aware finish time and all three canonical query JSON artifacts before it creates `summary.json` with `report_sha256` and `query_sha256`. Its status is `archived_local` for live data or `archived_fixture` for CSV or simulated data. For a blocked attempt, record the error and `archive_status: held` in `summary.json` if it does not exist. Preserve any existing summary and report a conflict.
 - `voice_audit`: `{"checks_passed": [string, ...], "fixes_applied": [{"section": string, "fix": string}, ...]}` from Step 7's self-audit. Both arrays MAY be empty if the audit ran cleanly and nothing needed fixing (improbable on early runs), but the `voice_audit` key itself MUST be present whenever Step 7 ran. A missing `voice_audit` after a successful run indicates Step 7 did not execute.
 - `notion_page_id`, `notion_url`: from the Skill-invoke step's success path; omit or set null on failure.
 - `prior_reports_consulted`: JSON array of `YYYY-MM-DD` strings recording which prior `reports/{date}.md` files were read during the prior-report calibration step (D-10). MAY be empty (`[]`) if fewer than three prior reports exist or none were consulted.
 - `errors`: list (may be empty); each entry `{"category": ..., "message": ..., "step": ...}`.
 - `warnings`: list (may be empty); each entry is a human-readable string. Used for non-fatal events that an auditor should see (e.g., `simulate_stale_applied: ...`, `arguments_ignored: ...`).
 
-PERSIST-03 contract: the write order is queries -> report -> Skill -> summary.json LAST. If any earlier step throws, this step still runs. Implementation: after each step that succeeds, append the cumulative state to `runs/{run_date}/.partial-state.json` (transient file, dot-prefixed). If any step throws, this step reads `.partial-state.json`, merges in the captured error, writes the final `summary.json`, and deletes the partial file. The partial file lives only between throw and the write-summary step; it is never committed.
+The write order is queries, report and audit, then the selected destination, then `summary.json`. If any earlier step throws, this step still runs. Implementation: after each step that succeeds, append the cumulative state to `runs/{run_key}/.partial-state.json` (transient file, dot-prefixed). If any step throws, this step reads `.partial-state.json`, merges in the captured error, writes the final `summary.json`, and deletes the partial file. The partial file lives only between throw and the write-summary step; it is never committed.
 
 Always write summary.json. Never skip it. This is the ERR-02 contract.
 
 ## Step 11: Operator message
 
-Print exactly one of three patterns, then exit:
+In archive mode, read the summary and both report copies back. For an audited
+live run with a private checkout configured, run the command below. The helper
+copies only the verified report, summary, canonical query JSON and manifest to
+the returned directory in that checkout.
 
-- SUCCESS: `Run {run_date} complete. Notion: {url}. Local: reports/{run_date}.md`
-- NOTION-FAIL: `Run {run_date} complete locally but Notion write failed: {category}. Recovery: see docs/runbook.md § 'Notion write failed'. Local: reports/{run_date}.md`
+```bash
+python3 scripts/private_report_archive.py --checkout "$REPORT_ARCHIVE_CHECKOUT" \
+  --repository "$REPORT_ARCHIVE_REPOSITORY" --stage "$run_key"
+```
+
+Follow the verified private Git retention steps in `docs/schedule.md` if the
+operator has configured them. A staged file, a branch upload, and a merged
+archive have distinct outcomes. If the required destination cannot be staged
+or retained, surface `ARCHIVE-HELD` and preserve the ignored local artifacts
+and finalized summary. Use the returned path and manifest hash for readback.
+Keep fixtures local. Print the actual outcome, then exit.
+
+- ARCHIVE-COMPLETE: `Run {run_key} archived locally. Report: {artifact_root}/reports/{run_key}.md. Evidence: {artifact_root}/runs/{run_key}/summary.json`.
+- ARCHIVE-STAGED: `Run {run_key} staged in the verified private checkout. Report bundle: {path}.`.
+- ARCHIVE-RETAINED: Use this outcome only when `--verify-retained` returns `status: retained_private` for the staged manifest. Include the returned `revision` and `path`.
+- ARCHIVE-FIXTURE: `Fixture {run_key} archived for testing. Evidence: {artifact_root}/runs/{run_key}/summary.json`.
+- ARCHIVE-HELD: `Run {run_key} held at {step}: {error}. Evidence: {artifact_root}/runs/{run_key}/summary.json`.
+- SUCCESS: `Run {run_date} complete. Notion: {url}. Local: reports/{run_key}.md`
+- NOTION-FAIL: `Run {run_date} complete locally but Notion write failed: {category}. Recovery: see docs/runbook.md § 'Notion write failed'. Local: reports/{run_key}.md`
 - BQ-FAIL: `Run {run_date} FAILED at {step}: {error}. Recovery: see docs/runbook.md § '{relevant section}'.`
 
-The three patterns are exhaustive: every run finishes with one of them. For BQ-FAIL, the relevant docs/runbook.md section is one of "BigQuery auth failure" or "Required table is missing or empty", chosen by the error category recorded in Step 2 or Step 3 (`bq_auth` → "BigQuery auth failure"; `missing_table` or `empty_result` → "Required table is missing or empty"). Stale tables do NOT fail the run: staleness is surfaced inline in the report's Data Health section and disclaimed per-section via the D-12 rule (Step 6 § 4), so it never routes through the BQ-FAIL operator message. The runbook's "A required table is stale" section exists for the operator who notices a staleness flag in the published report, not for a recipe-aborted run.
+For BQ-FAIL, use the runbook section "BigQuery auth failure" for `bq_auth`, or "Required table is missing or empty" for `missing_table` and `empty_result`. Stale tables are surfaced in the report and use the runbook section "A required table is stale".
 
 For both NOTION-FAIL and BQ-FAIL, the operator's next move is to read the named runbook section. If this failure mode is not in `docs/runbook.md`, add it as part of the fix (per `docs/maintenance.md`; ERR-03). The runbook only helps if it stays current.

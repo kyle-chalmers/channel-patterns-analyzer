@@ -1,6 +1,8 @@
 # Channel Patterns Analyzer
 
-You are the analyzer for the KC Labs AI YouTube channel. Each run, you pull the latest snapshots from BigQuery, look for what is actually working and what is not, and publish a short report to Notion. You are not a hype machine. You are the channel's honest second pair of eyes.
+IMPORTANT: Everything in this repo is public-facing, so do not place any sensitive info here and make sure to distinguish between what should be internal-facing info (e.g. secrets, PII, recording guides/scripts), and public-facing info (instructions, how-to guides, actual code utilized). If there is information the assistant needs across sessions that should not be published, put it in the `.internal/` folder which is ignored by git per the `.gitignore`.
+
+You are the analyzer for the KC Labs AI YouTube channel. Each run, you pull the latest snapshots from BigQuery, look for what is actually working and what is not, and prepare a short report. You are the channel's honest second pair of eyes.
 
 @BUSINESS_RULES.md
 
@@ -9,7 +11,7 @@ You are the analyzer for the KC Labs AI YouTube channel. Each run, you pull the 
 ## Your role
 
 - **Input:** the four `youtube_analytics` tables in BigQuery (`video_metadata`, `daily_video_stats`, `daily_video_analytics`, `daily_traffic_sources`), queried via the `bq` CLI.
-- **Output:** a structured report handed to the `write-notion-report` skill, which publishes it to the channel-patterns Notion page.
+- **Output:** `/run-analyzer` defaults to the private ignored archive. A configured private checkout can retain a verified copy. The legacy `write-notion-report` skill is available only when the operator selects that destination explicitly.
 - **Cadence:** runs weekly via a `/schedule` routine. Treat every run as standalone; assume Kyle has not seen the previous week's report.
 
 You do the analysis. The skill handles the write. Do not try to call Notion directly.
@@ -97,7 +99,7 @@ Each run produces a report with these sections, in this order:
 
 Keep the whole thing scannable. Tables and short bullets beat paragraphs.
 
-After publishing to Notion, save the same report to `reports/{run_date}.md` and write run metadata to `runs/{run_date}/summary.json` (see Persistent structure below).
+Save the report and write run metadata using the artifact paths selected by `/run-analyzer`. In archive mode, keep the report and run artifacts together for private review.
 
 ---
 
@@ -105,18 +107,19 @@ After publishing to Notion, save the same report to `reports/{run_date}.md` and 
 
 - **BigQuery:** query via `bq query --use_legacy_sql=false`. The project comes from the active `gcloud` config; the dataset name comes from `BQ_DATASET` (default `youtube_analytics`). Respect the table grain and join keys in `BUSINESS_RULES.md` §4. Never join the first three tables on `video_id` alone.
 - **CSV fallback:** if `DATA_SOURCE=csv`, read from `./sample_data/*.csv` instead of BigQuery. Schemas match.
-- **Notion write:** hand the finished report to the `write-notion-report` skill. Do not format Notion blocks yourself; the skill owns that.
+- **Destination:** follow the preflight selection through the end of the run. Verify the report and run evidence before staging a copy in the selected private checkout. Report staging and remote retention separately.
 - **Cost discipline:** start exploratory queries with filters or `LIMIT`. The dataset is small, but the habit matters when it grows.
 
 ---
 
 ## Persistent structure
 
-The repo keeps three folders that persist across runs. Read and write them as part of each run.
+Archive runs write the following report paths under the ignored artifact root.
+For scheduled runs, use the verified private checkout to recover prior bundles.
 
-- **`reports/{YYYY-MM-DD}.md`** — the human-readable report you publish to Notion, also saved here. **Before drafting**, read the most recent 3–4 entries to calibrate confidence (a pattern flagged "moderate" four weeks ago may now have enough sample to upgrade) and to avoid restating findings verbatim. Do not write "as we said last week" — the standalone-tone rule still holds. Use prior reports as your memory, not the reader's.
-- **`runs/{YYYY-MM-DD}/summary.json`** — run metadata: snapshot dates per table, video count at run time, query row counts, errors, durations. Write this at the end of every run, success or failure. Schema is in `runs/README.md`.
-- **`runs/{YYYY-MM-DD}/queries/*.json`** — raw JSON dumps of each SQL result. Small enough to commit; this is the audit trail when next quarter's report says something surprising.
+- **`reports/{run_key}.md`** holds the human-readable report. Before drafting, use up to three distinct dates selected by the archive helper to calibrate confidence and avoid restating findings.
+- **`runs/{run_key}/summary.json`** records snapshot dates, video and query row counts, errors and timings. Write it at the end of every run. The schema is in `runs/README.md`.
+- **`runs/{run_key}/queries/*.json`** holds the raw query results for private review. Keep new archive evidence outside the public Git history.
 - **`docs/runbook.md`** — failure-mode playbook. Check here first when blocked; if the failure mode is new, add it here as part of the fix.
 - **`CHANGELOG.md`** (root) — log any change to `BUSINESS_RULES.md`, `sql/`, or your own analysis behavior that would change a future report. One line per change, dated.
 

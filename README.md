@@ -1,6 +1,6 @@
 # Channel Patterns Analyzer
 
-A scheduled Claude Code analyzer that reads YouTube channel metrics from BigQuery, identifies what's actually working on the channel (controlled for video age and small samples), and publishes a weekly report to Notion.
+A scheduled Claude Code analyzer that reads YouTube channel metrics from BigQuery, controls for video age and sample size, and prepares a weekly report. The current recipe archives reports privately. The original Notion integration remains an optional destination.
 
 **Built live as part of:** [The 4 Layers of Context Engineering (Make AI Actually Useful)](https://www.youtube.com/@kylechalmersdataai) — a KC Labs AI video that teaches the 4-layer Context Engineering framework (Instructions, Structure, Tools, Workflows) through one sustained build.
 
@@ -26,8 +26,8 @@ Every file in this repo is an exhibit of one of the four layers:
 |---|---|
 | **1. Instructions** | `CLAUDE.md` — the analyzer's operating brain (voice, rules, hedging guidance). Committed as the reference version; viewers who run Prompt 1 will draft their own and overwrite it. |
 | **2. Structure** | `BUSINESS_RULES.md` (imported from CLAUDE.md via `@BUSINESS_RULES.md`) + folder layout (`sql/`, `scripts/`, `images/`) |
-| **3. Tools** | BigQuery (`bq` CLI) for the data source; Notion (local MCP for terminal sessions + Claude web connector for cloud routines) for the output destination |
-| **4. Workflows** | The build pattern (GSD-driven planning, AI as doer + Kyle as project manager) + a Claude Code Skill (`write-notion-report`) + a scheduled `/schedule` routine that runs the analyzer every Monday at 9am Phoenix time + a persistent `reports/` archive and `runs/` audit trail so each weekly run leaves a durable record (see [Persistent structure](#persistent-structure)) |
+| **3. Tools** | BigQuery for analysis and a verified private archive for retention. The original Notion skill can still be selected explicitly. |
+| **4. Workflows** | A Claude Code scheduled task runs the analyzer and retains its report with the query audit trail. See [schedule setup](docs/schedule.md). |
 
 Without all four, this would be a chatbot. With all four, it runs without me.
 
@@ -55,9 +55,9 @@ Data flow:
         │                │
         ▼                ▼
 ┌──────────────┐  ┌──────────────────┐
-│   BigQuery   │  │  write-notion-   │
-│ youtube_     │  │  report Skill    │
-│ analytics    │  │  → Notion page   │
+│   BigQuery   │  │ Private archive  │
+│ youtube_     │  │ Report and run   │
+│ analytics    │  │ evidence         │
 │ (4 tables)   │  │                  │
 └──────────────┘  └──────────────────┘
 ```
@@ -72,9 +72,8 @@ Data flow:
 | **Google Cloud + BigQuery** | Data source | Need an existing `youtube_analytics`-style dataset. If you don't have one, the [youtube-bigquery-pipeline](https://github.com/kyle-chalmers/youtube-bigquery-pipeline) repo builds it for you. Free tier covers it. |
 | **`gcloud` CLI** | Authentication | `gcloud auth login` then `gcloud config set project <your-project>` |
 | **`bq` CLI** | Querying BigQuery | Comes with the Google Cloud SDK |
-| **Notion account** | Output destination | Free tier fine for a single page |
-| **Notion MCP** (terminal use) | Local Claude Code → Notion | See [notion.com/integrations](https://www.notion.com/integrations) |
-| **Notion Claude connector** (cloud routines) | Scheduled runs → Notion | Configure in your [Anthropic account](https://claude.com) under Connectors |
+| **Private GitHub checkout** (scheduled archive) | Retain reports across sessions | Configure the selected checkout and authenticated GitHub read access as described in [schedule setup](docs/schedule.md) |
+| **Notion MCP or Claude connector** (optional) | Legacy report destination | Configure only for `REPORT_DESTINATION=notion` |
 | **GSD framework** (optional) | Workflow scaffolding for the build | `claude` then ask it to install GSD |
 
 **No BigQuery yet?** See the [CSV fallback](#csv-fallback-for-non-bigquery-users) section below — you can follow along with a sample dataset.
@@ -201,12 +200,15 @@ The SQL files in `sql/` currently hardcode `youtube_analytics.<table>`. Your dat
 - One-line find-and-replace `youtube_analytics` → `$BQ_DATASET` (your real name) across `sql/*.sql`, or
 - Have the analyzer template the dataset name from `$BQ_DATASET` at query time (this is the preferred pattern — it keeps the SQL files portable and matches what `CLAUDE.md` already instructs).
 
-### 4. Configure Notion — both ways
+### 4. Choose the archive destination
 
-The video demos two paths because cloud routines and terminal sessions see different surfaces:
+Local archive mode uses the ignored `.internal/channel-patterns/` directory.
+For scheduled runs, configure a verified private GitHub checkout as described in
+[schedule setup](docs/schedule.md).
 
-- **Local MCP** (terminal sessions): your local Claude Code talks to Notion via an MCP server. The exact install command depends on the current Notion MCP distribution (check [notion.com/integrations](https://www.notion.com/integrations) — at recording time, verify with `claude mcp add notion <official-url-or-npx-cmd>` against current docs).
-- **Web connector** (scheduled routines): in your Anthropic account at [claude.com](https://claude.com), go to Connectors → add Notion. Cloud routines see this; they do NOT see your local MCP config.
+If you select the original `REPORT_DESTINATION=notion` path explicitly, a local
+session needs the Notion MCP connection and a cloud task needs the Anthropic
+Notion connector. Use the [integration documentation](https://www.notion.com/integrations).
 
 ### 5. Configure the BigQuery MCP connector (for Claude.ai web / cloud routines)
 
@@ -253,7 +255,7 @@ Click **Continue**, then sign in with the Google account that has access to `$BQ
 If you're running the analyzer locally, the steps above are enough. If you want to wrap it as a scheduled routine, the cloud environment is its own thing:
 
 - Routines run on Anthropic's infrastructure, not your laptop.
-- They need: the repo selected, environment variables defined per-routine, the Notion Claude connector (web), and BigQuery credentials that work without your local `gcloud` login (e.g., a service account key passed via env var).
+- Select the analyzer and private archive repositories. Configure BigQuery and private GitHub access in the task environment. Follow [the archive setup](docs/schedule.md).
 - See the [Anthropic routines docs](https://code.claude.com/docs/en/routines) for the cloud-env configuration screen.
 
 A routine that "works locally" will fail in the cloud if any of the above isn't scoped. Verify in the Anthropic UI before the routine's first scheduled fire.
@@ -354,13 +356,15 @@ channel-patterns-analyzer/
 
 ## Persistent structure
 
-Each weekly run leaves a durable record on disk, not just in Notion. Three folders + a changelog make the analyzer sustainably maintainable — and let viewers of this repo see the analyzer's actual output history over time.
+The repository keeps the original example reports. Current runs create the same
+artifact layout under the ignored private archive. Scheduled tasks can retain
+verified live bundles in a separate private Git checkout.
 
 ```
-reports/{YYYY-MM-DD}.md         ← the weekly report, same content sent to Notion
-runs/{YYYY-MM-DD}/
+reports/{run_key}.md            ← the weekly report
+runs/{run_key}/
     summary.json                ← snapshot dates, video count, query row counts, errors
-    queries/*.json              ← raw SQL results (small enough to commit)
+    queries/*.json              ← raw SQL results for private review
     report.md                   ← mirror of the report, kept here so the run folder is self-contained
 docs/runbook.md                 ← what to do when something breaks
 docs/maintenance.md             ← how to add a query, evolve a rule, retire a pattern
@@ -368,7 +372,9 @@ docs/schedule.md                ← how the weekly /schedule routine fires
 CHANGELOG.md                    ← log of material changes to rules/queries/behavior
 ```
 
-The analyzer reads recent `reports/` entries to calibrate confidence over time without breaking the standalone-tone rule. The `runs/` audit trail is what makes a surprising report answerable months later. The `docs/` folder is the operator manual that keeps the repo runnable when nobody's touched it in three months.
+The analyzer calibrates confidence from verified prior bundles in the private
+default branch when configured. Local-only runs use the ignored archive. The
+`runs/` audit trail preserves the evidence for each report.
 
 See `reports/README.md`, `runs/README.md`, and `docs/README.md` for details.
 

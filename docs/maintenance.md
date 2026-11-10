@@ -34,7 +34,7 @@ For a one-off question or to test a query change without waiting for the weekly 
 1. Confirm BigQuery auth: `bq query --use_legacy_sql=false "SELECT 1"`.
 2. Start a Claude Code session in the repo root. The `CLAUDE.md` + `BUSINESS_RULES.md` get loaded automatically.
 3. Ask the analyzer to run a report.
-4. The output goes to Notion as usual **and** to `reports/{today}.md` + `runs/{today}/`. If you don't want the run in the archive (e.g., you're testing a broken query), say so explicitly to the analyzer or delete the folder before committing.
+4. The report and run evidence land in the ignored private archive. Use a CSV fixture for an unretained test. See [schedule setup](schedule.md) for private Git retention.
 
 ## Re-running after a failure
 

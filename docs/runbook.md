@@ -6,6 +6,14 @@ If you hit a failure mode that isn't here, add it as part of the fix. The runboo
 
 ---
 
+## Private archive held
+
+The analyzer keeps its local report and receipt when private retention fails.
+Check that the configured checkout is the root of the intended private repo
+and that both origin URLs and the GitHub API verification agree. Then rerun
+the staging helper for the existing run key. Read the retained files back from
+the intended Git revision before reporting a completed transfer.
+
 ## BigQuery auth failure
 
 **Symptom.** `bq query` returns `Could not load the default credentials` or `Reauthentication is needed`. The analyzer's first SQL call errors out.
@@ -20,7 +28,7 @@ gcloud config set project "$BQ_PROJECT"
 
 Then re-run the analyzer.
 
-**Fix (scheduled cloud routine).** The routine uses the BigQuery web connector authorized in your Anthropic account, not a long-lived credential file. If the connector is the issue, see § "BigQuery MCP connector not authorized" below. The routine has no `bq` or `gcloud` CLI; do not look for missing local-auth state. See `docs/schedule.md` § "Local vs. cloud" for the cloud-vs-local distinction.
+**Fix (scheduled cloud routine).** The routine uses the BigQuery web connector authorized in your Anthropic account, not a long-lived credential file. If the connector is the issue, see § "BigQuery MCP connector not authorized" below. See [schedule setup](schedule.md) for the cloud environment.
 
 **Recording.** If credentials expired on a known cadence, note the next expiry in `CHANGELOG.md` so future-you isn't surprised.
 
@@ -74,7 +82,9 @@ Then re-run the analyzer.
 
 **Fix (web connector / cloud routine).** Re-authorize the Notion connector in your Anthropic account at [claude.com](https://claude.com). Confirm `NOTION_REPORT_PAGE_ID` is still valid and the connector has access. For the cloud-routine variant where the connector is missing entirely from the session, see § "Notion connector not authorized" below.
 
-**Recovery.** Even if the Notion write fails, the report should still land in `reports/{run_date}.md` and the run folder in `runs/{run_date}/` so the work isn't lost. Re-publishing to Notion is a separate manual step.
+**Recovery.** The report and run evidence remain under the ignored
+`.internal/channel-patterns/` archive. Use the returned run key to find them.
+Re-publishing to Notion is a separate manual step.
 
 ---
 
@@ -110,7 +120,9 @@ For the cloud-routine variant (the var is missing from the routine config, not t
 
 **Symptom.** A cloud-routine session returns `{ok: false, category: "transport_error"}` (or `permission_denied`) from the Skill invocation, and the run transcript shows the Notion tool was either missing or returned an auth-style error. Recipe Step 9 surfaces the NOTION-FAIL operator message. This is distinct from the "Notion write failed" section above, which covers the broader local-MCP-and-connector failure surface; this section is the cloud-only "connector missing from the session" case.
 
-**Fix.** Open [claude.com](https://claude.com), Settings, Connectors. Re-authorize Notion. Confirm the integration has access to the parent page named by `NOTION_REPORT_PAGE_ID`. Re-run the routine via "Run now".
+**Fix.** For a historical Notion run, preserve its receipt. Current hosted runs
+use the private archive setup in [Schedule](schedule.md). For an explicit local
+legacy run, follow the connector checks under "Notion write failed".
 
 **Recording.** Same as § "Notion write failed". If connector reauthorization becomes a recurring need, log the cadence in `CHANGELOG.md`.
 
@@ -120,7 +132,9 @@ For the cloud-routine variant (the var is missing from the routine config, not t
 
 **Symptom.** `summary.json.errors[]` records `category: env_missing` from a cloud-routine session. The local `.env` is fine; the routine's per-routine environment configuration didn't include the var. The recipe stops at Step 0 preflight with no queries run.
 
-**Fix.** Open the routine in [claude.com](https://claude.com), Routines, channel-patterns-analyzer. Click the cloud icon below the Instructions box, then the settings icon, then Environment variables. Add the missing var. The four env vars the analyzer reads are listed in `.env.example`; reference it when adding to the routine. Re-run via "Run now".
+**Fix.** Open the [Claude Code routine](https://claude.ai/code/routines) and add
+the required value to its cloud environment. See `.env.example` and
+[Schedule](schedule.md) for the private archive settings.
 
 **Recording.** If the same var is missing on multiple runs, the routine config drifted from `.env.example`. File a `CHANGELOG.md` entry naming the drift.
 

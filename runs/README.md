@@ -26,7 +26,8 @@ When a Notion report from three months ago says something surprising, opening `r
 
 That's the difference between "the analyzer said it" and "the analyzer said it and here's why."
 
-The dataset is small enough (~23 videos across 4 tables) that committing raw query results is cheap and worth it.
+In the existing Notion workflow, the tracked query results provide its audit
+trail. Archive mode keeps the query results with the private ignored artifacts.
 
 ## `summary.json` schema
 
@@ -97,7 +98,31 @@ Always write `summary.json`, even on failure. A failed run with `errors: [...]` 
 - `checks_passed` is the list of canonical check identifiers (snake-case names, defined in the recipe's Step 7) that the analyzer ticked through cleanly. The example above lists the full 17-identifier set in the same order the recipe documents them (`six_sections_in_order`, `empty_sections_render_with_explicit_body`, `stale_table_disclaimers_present`, `age_control_enforced`, `cross_age_window_labeled`, `trending_claims_have_minimum_age`, `confidence_labels_present`, `confidence_n_matches_comparison_set`, `confidence_thresholds_correct`, `no_em_dashes`, `no_en_dashes_as_punctuation`, `no_banned_vocab`, `no_formulaic_openers`, `first_person_plural_where_it_fits`, `no_prior_report_citation`, `multi_week_claims_self_contained`, `numbers_match_underlying_query_results`). The recipe is the source of truth; if the recipe's identifier list changes, re-derive this list rather than maintaining the two in parallel.
 - `fixes_applied` is the list of inline fixes the self-audit made before publishing. Each entry has `section` (the report section where the fix landed, e.g., `"What is working"`, `"Patterns worth watching"`, or `"(audit)"` for items the audit could not verify and noted) and `fix` (a one-line description of what changed). Empty array means the draft passed cleanly with no fixes needed.
 
-A missing `voice_audit` block on an otherwise-successful run is itself a finding: the self-audit step did not execute. Enforcement is markdown, not code, so the absence is the only after-the-fact signal that the gate was skipped. Next-run analysts should investigate any prior run whose `summary.json` lacks `voice_audit`.
+A missing `voice_audit` block on an older run is a gap in its evidence. The
+archive finalizer requires the full set of check identifiers before a run
+qualifies for private calibration.
+
+## Archive mode
+
+The preflight allocates a private root and run key. Within that root, the report
+lives at `reports/{run_key}.md`, with matching bytes in `runs/{run_key}/report.md`.
+The matching `summary.json` records `report_destination: archive`, `run_key`,
+`archive_status` and `notion_write_ok: false`. Use `archive_status` to interpret an
+archive run. The finalizer checks the pending summary and matching report bytes
+before it creates `summary.json` with the report and query SHA-256 hashes.
+The finish time must have a timezone and all three query results must parse.
+The audit identifiers are the analyzer's attestation. The helper verifies the
+attestation's shape and the report bytes. Source claims still need the run's
+evidence checks.
+CSV and simulated runs use `archived_fixture` and stay out of live calibration.
+`held` records an incomplete attempt and its error. Same-day attempts use
+separate numeric suffixes. Prior-report selection verifies the saved hash before
+including a completed attempt.
+
+The private Git transfer copies the validated report, summary and the three
+canonical JSON results. Its manifest binds their bytes and identifies the
+immutable bundle directory. A staged copy is ready for an authorized private
+commit. Verify remote retention separately as described in [schedule setup](../docs/schedule.md).
 
 ## Related
 
